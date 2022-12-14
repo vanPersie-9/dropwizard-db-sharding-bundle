@@ -300,7 +300,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     public LockedContext<T> lockAndGetExecutor(String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new LockedContext<>(shardId, dao.sessionFactory, dao::getLockedForWrite, id);
+        return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id));
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
@@ -531,18 +531,16 @@ public class LookupDao<T> implements ShardedDao<T> {
 
         private final int shardId;
         private final SessionFactory sessionFactory;
-        private Function<String, T> function;
+        private final List<Function<T, Void>> operations = Lists.newArrayList();
+        private Supplier<T> getter;
         private Function<T, T> saver;
         private T entity;
-        private String key;
-        private List<Function<T, Void>> operations = Lists.newArrayList();
         private final Mode mode;
 
-        public LockedContext(int shardId, SessionFactory sessionFactory, Function<String, T> getter, String key) {
+        public LockedContext(int shardId, SessionFactory sessionFactory, Supplier<T> getter) {
             this.shardId = shardId;
             this.sessionFactory = sessionFactory;
-            this.function = getter;
-            this.key = key;
+            this.getter = getter;
             this.mode = Mode.READ;
         }
 
@@ -700,9 +698,9 @@ public class LookupDao<T> implements ShardedDao<T> {
             T result = null;
             switch (mode) {
                 case READ:
-                    result = function.apply(key);
+                    result = getter.get();
                     if (result == null) {
-                        throw new RuntimeException("Entity doesn't exist for key: " + key);
+                        throw new RuntimeException("Entity doesn't exist");
                     }
                     break;
                 case INSERT:
