@@ -532,7 +532,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         private final int shardId;
         private final SessionFactory sessionFactory;
         private final List<Function<T, Void>> operations = Lists.newArrayList();
-        private Supplier<T> function;
+        private Supplier<T> getter;
         private Function<T, T> saver;
         private T entity;
         private final Mode mode;
@@ -540,7 +540,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         public LockedContext(int shardId, SessionFactory sessionFactory, Supplier<T> getter) {
             this.shardId = shardId;
             this.sessionFactory = sessionFactory;
-            this.function = getter;
+            this.getter = getter;
             this.mode = Mode.READ;
         }
 
@@ -698,7 +698,7 @@ public class LookupDao<T> implements ShardedDao<T> {
             T result = null;
             switch (mode) {
                 case READ:
-                    result = function.get();
+                    result = getter.get();
                     if (result == null) {
                         throw new RuntimeException("Entity doesn't exist");
                     }
