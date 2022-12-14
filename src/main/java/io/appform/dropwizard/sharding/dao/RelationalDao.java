@@ -28,7 +28,12 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.hibernate.*;
+import org.hibernate.Criteria;
+import org.hibernate.LockMode;
+import org.hibernate.ScrollMode;
+import org.hibernate.ScrollableResults;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
@@ -194,74 +199,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return Transactions.execute(dao.sessionFactory, false, dao::saveAll, entities);
     }
 
-    <U> void save(LookupDao.LockedContext<U> context, T entity) {
+    <U> void save(LockedContext<U> context, T entity) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         Transactions.execute(context.getSessionFactory(), false, dao::save, entity, t->t, false);
     }
 
-    <U> void save(LookupDao.LockedContext<U> context, T entity, Function<T, T> handler) {
+    <U> void save(LockedContext<U> context, T entity, Function<T, T> handler) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         Transactions.execute(context.getSessionFactory(), false, dao::save, entity, handler, false);
     }
 
-    <U> void save(RelationalDao.LockedContext<U> context, T entity) {
-        RelationalDaoPriv dao = daos.get(context.getShardId());
-        Transactions.execute(context.getSessionFactory(), false, dao::save, entity, t->t, false);
-    }
-
-    <U> void save(RelationalDao.LockedContext<U> context, T entity, Function<T, T> handler) {
-        RelationalDaoPriv dao = daos.get(context.getShardId());
-        Transactions.execute(context.getSessionFactory(), false, dao::save, entity, handler, false);
-    }
-
-    <U> boolean update(LookupDao.LockedContext<U> context, Object id, Function<T, T> updater) {
+    <U> boolean update(LockedContext<U> context, Object id, Function<T, T> updater) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         return update(context.getSessionFactory(), dao, id, updater, false);
     }
 
-    <U> boolean update(RelationalDao.LockedContext<U> context, Object id, Function<T, T> updater) {
-        RelationalDaoPriv dao = daos.get(context.getShardId());
-        return update(context.getSessionFactory(), dao, id, updater, false);
-    }
-
-    <U> boolean update(LookupDao.LockedContext<U> context,
-                       DetachedCriteria criteria,
-                       Function<T, T> updater,
-                       BooleanSupplier updateNext) {
-        final RelationalDaoPriv dao = daos.get(context.getShardId());
-
-        try {
-            final ScrollParamPriv scrollParam = ScrollParamPriv.builder()
-                    .criteria(criteria)
-                    .build();
-
-            return Transactions.<ScrollableResults, ScrollParamPriv, Boolean>execute(context.getSessionFactory(), true, dao::scroll, scrollParam, scrollableResults -> {
-                boolean updateNextObject = true;
-                try {
-                    while(scrollableResults.next() && updateNextObject) {
-                        final T entity = (T) scrollableResults.get(0);
-                        if (null == entity) {
-                            return false;
-                        }
-                        final T newEntity = updater.apply(entity);
-                        if(null == newEntity) {
-                            return false;
-                        }
-                        dao.update(entity, newEntity);
-                        updateNextObject = updateNext.getAsBoolean();
-                    }
-                }
-                finally {
-                    scrollableResults.close();
-                }
-                return true;
-            }, false);
-        } catch (Exception e) {
-            throw new RuntimeException("Error updating entity with scroll: " + criteria, e);
-        }
-    }
-
-    <U> boolean update(RelationalDao.LockedContext<U> context,
+    <U> boolean update(LockedContext<U> context,
                        DetachedCriteria criteria,
                        Function<T, T> updater,
                        BooleanSupplier updateNext) {
@@ -374,12 +327,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return Transactions.execute(dao.sessionFactory, false, dao::update, updateOperationMeta);
     }
 
-    public <U> int updateUsingQuery(LookupDao.LockedContext<U> lockedContext, UpdateOperationMeta updateOperationMeta) {
-        val dao = daos.get(lockedContext.getShardId());
-        return Transactions.execute(lockedContext.getSessionFactory(), false, dao::update, updateOperationMeta, false);
-    }
-
-    public <U> int updateUsingQuery(RelationalDao.LockedContext<U> lockedContext, UpdateOperationMeta updateOperationMeta) {
+    public <U> int updateUsingQuery(LockedContext<U> lockedContext, UpdateOperationMeta updateOperationMeta) {
         val dao = daos.get(lockedContext.getShardId());
         return Transactions.execute(lockedContext.getSessionFactory(), false, dao::update, updateOperationMeta, false);
     }
@@ -387,7 +335,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public LockedContext<T> lockAndGetExecutor(String parentKey, DetachedCriteria criteria) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        return new LockedContext<T>(shardId, dao.sessionFactory, dao::getLockedForWrite, criteria);
+        return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria));
     }
 
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
@@ -396,45 +344,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return new LockedContext<T>(shardId, dao.sessionFactory, dao::save, entity);
     }
 
-    <U> boolean createOrUpdate(LookupDao.LockedContext<U> context,
-                               DetachedCriteria criteria,
-                               Function<T, T> updater,
-                               Supplier<T> entityGenerator) {
-        final RelationalDaoPriv dao = daos.get(context.getShardId());
-
-        try {
-            final SelectParamPriv selectParam = SelectParamPriv.builder()
-                    .criteria(criteria)
-                    .start(0)
-                    .numRows(1)
-                    .build();
-
-            return Transactions.<List<T>, SelectParamPriv, Boolean>execute(context.getSessionFactory(), true, dao::select, selectParam, (List<T> entityList) -> {
-                if(entityList == null || entityList.isEmpty()) {
-                    Preconditions.checkNotNull(entityGenerator, "Entity generator can't be null");
-                    final T newEntity = entityGenerator.get();
-                    Preconditions.checkNotNull(newEntity, "Generated entity can't be null");
-                    dao.save(newEntity);
-                    return true;
-                }
-
-                final T oldEntity = entityList.get(0);
-                if(null == oldEntity) {
-                    return false;
-                }
-                final T newEntity = updater.apply(oldEntity);
-                if(null == newEntity) {
-                    return false;
-                }
-                dao.update(oldEntity, newEntity);
-                return true;
-            }, false);
-        } catch (Exception e) {
-            throw new RuntimeException("Error updating entity with criteria: " + criteria, e);
-        }
-    }
-
-    <U> boolean createOrUpdate(RelationalDao.LockedContext<U> context,
+    <U> boolean createOrUpdate(LockedContext<U> context,
                                DetachedCriteria criteria,
                                Function<T, T> updater,
                                Supplier<T> entityGenerator) {
@@ -566,205 +476,4 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return this.keyField;
     }
 
-    /**
-     * A context for a shard
-     */
-    @Getter
-    public static class LockedContext<T> {
-        @FunctionalInterface
-        public interface Mutator<T> {
-            void mutator(T parent);
-        }
-
-        enum Mode {READ, INSERT}
-
-        private final int shardId;
-        private final SessionFactory sessionFactory;
-
-        private Function<DetachedCriteria, T> function;
-        private DetachedCriteria criteria;
-
-        private Function<T, T> saver;
-        private T entity;
-
-        private List<Function<T, Void>> operations = Lists.newArrayList();
-        private final Mode mode;
-
-        public LockedContext(int shardId, SessionFactory sessionFactory, Function<DetachedCriteria, T> getter, DetachedCriteria criteria) {
-            this.shardId = shardId;
-            this.sessionFactory = sessionFactory;
-            this.function = getter;
-            this.criteria = criteria;
-            this.mode = Mode.READ;
-        }
-
-        public LockedContext(int shardId, SessionFactory sessionFactory, Function<T, T> saver, T entity) {
-            this.shardId = shardId;
-            this.sessionFactory = sessionFactory;
-            this.saver = saver;
-            this.entity = entity;
-            this.mode = Mode.INSERT;
-        }
-
-        public LockedContext<T> mutate(Mutator<T> mutator) {
-            return apply(parent -> {
-                mutator.mutator(parent);
-                return null;
-            });
-        }
-
-        public LockedContext<T> apply(Function<T, Void> handler) {
-            this.operations.add(handler);
-            return this;
-        }
-
-        public <U> LockedContext<T> save(RelationalDao<U> relationalDao, Function<T, U> entityGenerator) {
-            return apply(parent -> {
-                try {
-                    U entity = entityGenerator.apply(parent);
-                    relationalDao.save(this, entity);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> saveAll(RelationalDao<U> relationalDao, Function<T, List<U>> entityGenerator) {
-            return apply(parent -> {
-                try {
-                    List<U> entities = entityGenerator.apply(parent);
-                    for (U entity : entities) {
-                        relationalDao.save(this, entity);
-                    }
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> save(RelationalDao<U> relationalDao, U entity, Function<U, U> handler) {
-            return apply(parent -> {
-                try {
-                    relationalDao.save(this, entity, handler);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> updateUsingQuery(
-                RelationalDao<U> relationalDao,
-                UpdateOperationMeta updateOperationMeta) {
-            return apply(parent -> {
-                try {
-                    relationalDao.updateUsingQuery(this, updateOperationMeta);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> update(RelationalDao<U> relationalDao, Object id, Function<U, U> handler) {
-            return apply(parent -> {
-                try {
-                    relationalDao.update(this, id, handler);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> createOrUpdate(
-                RelationalDao<U> relationalDao,
-                DetachedCriteria criteria,
-                UnaryOperator<U> updater,
-                Supplier<U> entityGenerator) {
-            return apply(parent -> {
-                try {
-                    relationalDao.createOrUpdate(this, criteria, updater, entityGenerator);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public <U> LockedContext<T> update(
-                RelationalDao<U> relationalDao,
-                DetachedCriteria criteria,
-                Function<U, U> updater,
-                BooleanSupplier updateNext) {
-            return apply(parent -> {
-                try {
-                    relationalDao.update(this, criteria, updater, updateNext);
-                }
-                catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                return null;
-            });
-        }
-
-        public LockedContext<T> filter(Predicate<T> predicate) {
-            return filter(predicate, new IllegalArgumentException("Predicate check failed"));
-        }
-
-        public LockedContext<T> filter(Predicate<T> predicate, RuntimeException failureException) {
-            return apply(parent -> {
-                boolean result = predicate.test(parent);
-                if (!result) {
-                    throw failureException;
-                }
-                return null;
-            });
-        }
-
-        public T execute() {
-            TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, false);
-            transactionHandler.beforeStart();
-            try {
-                T result = generateEntity();
-                operations
-                        .forEach(operation -> operation.apply(result));
-                return result;
-            }
-            catch (Exception e) {
-                transactionHandler.onError();
-                throw e;
-            }
-            finally {
-                transactionHandler.afterEnd();
-            }
-        }
-
-        private T generateEntity() {
-            T result = null;
-            switch (mode) {
-                case READ:
-                    result = function.apply(criteria);
-                    if (result == null) {
-                        throw new RuntimeException("Entity doesn't exist for criteria: " + criteria);
-                    }
-                    break;
-                case INSERT:
-                    result = saver.apply(entity);
-                    break;
-                default:
-                    break;
-
-            }
-            return result;
-        }
-    }
 }

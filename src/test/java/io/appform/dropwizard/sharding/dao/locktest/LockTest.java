@@ -20,6 +20,7 @@ package io.appform.dropwizard.sharding.dao.locktest;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.dao.LockedContext;
 import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
@@ -480,7 +481,7 @@ public class LockTest {
                 .build();
 
         // save
-        RelationalDao.LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
         context.save(relationDao, parent -> {
             someOtherObject2.setMyId(String.valueOf(parent.getId()));
             return  someOtherObject2;
@@ -492,7 +493,7 @@ public class LockTest {
         context.execute();
 
         // update
-        RelationalDao.LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
+        LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", someOtherObject.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
@@ -519,7 +520,7 @@ public class LockTest {
                 .build();
 
         // save
-        RelationalDao.LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
         context.save(relationDao, parent -> {
             someOtherObject2.setMyId(String.valueOf(parent.getId()));
             return  someOtherObject2;
@@ -527,7 +528,7 @@ public class LockTest {
         context.execute();
 
         // update
-        RelationalDao.LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
+        LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", someOtherObject.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
@@ -565,7 +566,7 @@ public class LockTest {
                 .build();
 
         // save
-        RelationalDao.LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
         context.save(relationDao, parent -> {
             someOtherObject2.setMyId(String.valueOf(parent.getId()));
             return  someOtherObject2;
@@ -577,7 +578,7 @@ public class LockTest {
         context.execute();
 
         // update
-        RelationalDao.LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
+        LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", someOtherObject.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
@@ -619,7 +620,7 @@ public class LockTest {
                 .build();
 
         // save
-        RelationalDao.LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(p1.getMyId(), p1);
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(p1.getMyId(), p1);
         context.save(relationDao, parent -> {
             c1.setMyId(String.valueOf(parent.getId()));
             return  c1;
@@ -627,7 +628,7 @@ public class LockTest {
         context.execute();
 
         // update
-        RelationalDao.LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(p1.getMyId(),
+        LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(p1.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", p1.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
@@ -670,7 +671,7 @@ public class LockTest {
                 .build();
 
         // save
-        RelationalDao.LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(p1.getMyId(), p1);
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(p1.getMyId(), p1);
         context.save(relationDao, parent -> {
             c1.setMyId(String.valueOf(parent.getId()));
             return  c1;
@@ -682,7 +683,7 @@ public class LockTest {
         context.execute();
 
         // update
-        RelationalDao.LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(p1.getMyId(),
+        LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(p1.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", p1.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
@@ -816,7 +817,7 @@ public class LockTest {
         assertFalse(testExecuted.get());
     }
 
-    private boolean saveEntity(LookupDao.LockedContext<SomeLookupObject> lockedContext) {
+    private boolean saveEntity(LockedContext<SomeLookupObject> lockedContext) {
         return lockedContext
                 .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
                 .save(relationDao, parent -> SomeOtherObject.builder()
