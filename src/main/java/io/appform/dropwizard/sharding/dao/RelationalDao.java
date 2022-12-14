@@ -185,22 +185,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return Transactions.execute(dao.sessionFactory, false, dao::saveAll, entities);
     }
 
-    <U> void save(LookupDao.LockedContext<U> context, T entity) {
+    <U> void save(LockedContext<U> context, T entity) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         Transactions.execute(context.getSessionFactory(), false, dao::save, entity, t->t, false);
     }
 
-    <U> void save(LookupDao.LockedContext<U> context, T entity, Function<T, T> handler) {
+    <U> void save(LockedContext<U> context, T entity, Function<T, T> handler) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         Transactions.execute(context.getSessionFactory(), false, dao::save, entity, handler, false);
     }
 
-    <U> boolean update(LookupDao.LockedContext<U> context, Object id, Function<T, T> updater) {
+    <U> boolean update(LockedContext<U> context, Object id, Function<T, T> updater) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         return update(context.getSessionFactory(), dao, id, updater, false);
     }
 
-    <U> boolean update(LookupDao.LockedContext<U> context,
+    <U> boolean update(LockedContext<U> context,
                        DetachedCriteria criteria,
                        Function<T, T> updater,
                        BooleanSupplier updateNext) {
@@ -313,13 +313,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return Transactions.execute(dao.sessionFactory, false, dao::update, updateOperationMeta);
     }
 
-    public <U> int updateUsingQuery(LookupDao.LockedContext<U> lockedContext, UpdateOperationMeta updateOperationMeta) {
+    public <U> int updateUsingQuery(LockedContext<U> lockedContext, UpdateOperationMeta updateOperationMeta) {
         val dao = daos.get(lockedContext.getShardId());
         return Transactions.execute(lockedContext.getSessionFactory(), false, dao::update, updateOperationMeta, false);
     }
 
 
-    <U> boolean createOrUpdate(LookupDao.LockedContext<U> context,
+    <U> boolean createOrUpdate(LockedContext<U> context,
                                DetachedCriteria criteria,
                                Function<T, T> updater,
                                Supplier<T> entityGenerator) {
