@@ -20,6 +20,7 @@ package io.appform.dropwizard.sharding.dao.locktest;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.dao.LockedContext;
 import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
@@ -553,7 +554,7 @@ public class LockTest {
         assertFalse(testExecuted.get());
     }
 
-    private boolean saveEntity(LookupDao.LockedContext<SomeLookupObject> lockedContext) {
+    private boolean saveEntity(LockedContext<SomeLookupObject> lockedContext) {
         return lockedContext
                 .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
                 .save(relationDao, parent -> SomeOtherObject.builder()
