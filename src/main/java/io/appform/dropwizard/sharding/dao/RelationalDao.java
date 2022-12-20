@@ -18,7 +18,9 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
+import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
@@ -26,7 +28,12 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.hibernate.*;
+import org.hibernate.Criteria;
+import org.hibernate.LockMode;
+import org.hibernate.ScrollMode;
+import org.hibernate.ScrollableResults;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
@@ -39,7 +46,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /**
@@ -65,9 +74,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         T get(Object lookupKey) {
             return uniqueResult(currentSession()
-                                .createCriteria(entityClass)
-                                .add(
-                                        Restrictions.eq(keyField.getName(), lookupKey)));
+                    .createCriteria(entityClass)
+                    .add(Restrictions.eq(keyField.getName(), lookupKey))
+                    .setLockMode(LockMode.READ));
+        }
+
+        T getLockedForWrite(DetachedCriteria criteria) {
+            return uniqueResult(criteria.getExecutableCriteria(currentSession())
+                    .setLockMode(LockMode.UPGRADE_NOWAIT));
         }
 
         T save(T entity) {
@@ -318,6 +332,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return Transactions.execute(lockedContext.getSessionFactory(), false, dao::update, updateOperationMeta, false);
     }
 
+    public LockedContext<T> lockAndGetExecutor(String parentKey, DetachedCriteria criteria) {
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
+        return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria));
+    }
+
+    public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
+        return new LockedContext<T>(shardId, dao.sessionFactory, dao::save, entity);
+    }
 
     <U> boolean createOrUpdate(LockedContext<U> context,
                                DetachedCriteria criteria,
@@ -450,4 +475,5 @@ public class RelationalDao<T> implements ShardedDao<T> {
     protected Field getKeyField() {
         return this.keyField;
     }
+
 }
