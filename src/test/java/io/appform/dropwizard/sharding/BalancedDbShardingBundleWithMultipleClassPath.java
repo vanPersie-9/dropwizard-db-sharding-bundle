@@ -62,10 +62,6 @@ public class BalancedDbShardingBundleWithMultipleClassPath extends DBShardingBun
                 return testConfig.getShards();
             }
 
-            @Override
-            protected ShardingBundleOptions getShardingOptions() {
-                return testConfig.getShardingOptions();
-            }
         };
     }
 

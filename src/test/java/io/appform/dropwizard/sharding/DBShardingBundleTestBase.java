@@ -58,10 +58,10 @@ import static org.mockito.Mockito.when;
 public abstract class DBShardingBundleTestBase {
     protected static class TestConfig extends Configuration {
         @Getter
-        private ShardedHibernateFactory shards = new ShardedHibernateFactory();
+        private ShardedHibernateFactory shards = ShardedHibernateFactory.builder()
+                .shardingOptions(new ShardingBundleOptions(false))
+                .build();
 
-        @Getter
-        private ShardingBundleOptions shardingOptions = new ShardingBundleOptions(true);
     }
 
     protected final TestConfig testConfig = new TestConfig();

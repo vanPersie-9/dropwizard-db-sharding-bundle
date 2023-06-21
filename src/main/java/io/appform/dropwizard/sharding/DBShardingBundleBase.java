@@ -58,6 +58,7 @@ import javax.persistence.Entity;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -122,7 +123,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         this.numShards = Integer.parseInt(numShardsEnv);
         val blacklistingStore = getBlacklistingStore();
         this.shardManager = createShardManager(numShards, blacklistingStore);
-        this.shardingOptions = getShardingOptions();
         this.shardInfoProvider = new ShardInfoProvider(dbNamespace);
         this.healthCheckManager = new HealthCheckManager(dbNamespace, shardInfoProvider, blacklistingStore, shardManager);
         IntStream.range(0, numShards).forEach(
@@ -147,6 +147,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             throw new RuntimeException("Shard count provided through environment does not match the size of the shard configuration list");
         }
         sessionFactories = shardBundles.stream().map(HibernateBundle::getSessionFactory).collect(Collectors.toList());
+        this.shardingOptions = getShardingOptions(configuration);
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
@@ -188,8 +189,9 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new InMemoryLocalShardBlacklistingStore();
     }
 
-    protected ShardingBundleOptions getShardingOptions() {
-        return new ShardingBundleOptions();
+    private ShardingBundleOptions getShardingOptions(T configuration) {
+        val shardingOptions = getConfig(configuration).getShardingOptions();
+        return  Objects.nonNull(shardingOptions) ? shardingOptions : new ShardingBundleOptions();
     }
 
     public <EntityType, T extends Configuration>
