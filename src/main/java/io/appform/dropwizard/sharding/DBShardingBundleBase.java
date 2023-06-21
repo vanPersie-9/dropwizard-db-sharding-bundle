@@ -25,7 +25,7 @@ import io.appform.dropwizard.sharding.admin.BlacklistShardTask;
 import io.appform.dropwizard.sharding.admin.UnblacklistShardTask;
 import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
-import io.appform.dropwizard.sharding.config.CustomDatabaseConfig;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.dao.CacheableLookupDao;
 import io.appform.dropwizard.sharding.dao.CacheableRelationalDao;
@@ -82,7 +82,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     @Getter
     private int numShards;
     @Getter
-    private CustomDatabaseConfig customDatabaseConfig;
+    private ShardingBundleOptions shardingOptions;
 
     private ShardInfoProvider shardInfoProvider;
 
@@ -122,7 +122,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         this.numShards = Integer.parseInt(numShardsEnv);
         val blacklistingStore = getBlacklistingStore();
         this.shardManager = createShardManager(numShards, blacklistingStore);
-        this.customDatabaseConfig = getCustomDatabaseConfig();
+        this.shardingOptions = getShardingOptions();
         this.shardInfoProvider = new ShardInfoProvider(dbNamespace);
         this.healthCheckManager = new HealthCheckManager(dbNamespace, shardInfoProvider, blacklistingStore, shardManager);
         IntStream.range(0, numShards).forEach(
@@ -188,14 +188,14 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new InMemoryLocalShardBlacklistingStore();
     }
 
-    protected CustomDatabaseConfig getCustomDatabaseConfig() {
-        return new CustomDatabaseConfig();
+    protected ShardingBundleOptions getShardingOptions() {
+        return new ShardingBundleOptions();
     }
 
     public <EntityType, T extends Configuration>
     LookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz) {
         return new LookupDao<>(this.sessionFactories, clazz,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)), this.customDatabaseConfig);
+                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),this.shardingOptions);
     }
 
     public <EntityType, T extends Configuration>
@@ -203,13 +203,13 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          LookupCache<EntityType> cacheManager) {
         return new CacheableLookupDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                cacheManager, this.customDatabaseConfig);
+                cacheManager, this.shardingOptions);
     }
 
     public <EntityType, T extends Configuration>
     LookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz,
                                                 BucketIdExtractor<String> bucketIdExtractor) {
-        return new LookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), this.customDatabaseConfig);
+        return new LookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), this.shardingOptions);
     }
 
     public <EntityType, T extends Configuration>
@@ -217,7 +217,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          BucketIdExtractor<String> bucketIdExtractor,
                                                          LookupCache<EntityType> cacheManager) {
         return new CacheableLookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
-                cacheManager, this.customDatabaseConfig);
+                cacheManager, this.shardingOptions);
     }
 
 

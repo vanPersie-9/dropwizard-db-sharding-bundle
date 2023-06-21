@@ -21,7 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
-import io.appform.dropwizard.sharding.config.CustomDatabaseConfig;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -107,7 +107,7 @@ public class CacheableLookupDaoTest {
                         return cache.get(key);
                     }
                 },
-                new CustomDatabaseConfig());
+                new ShardingBundleOptions());
         phoneDao = new CacheableLookupDao<>(sessionFactories,
                                             Phone.class,
                                             new ShardCalculator<>(shardManager,
@@ -131,7 +131,7 @@ public class CacheableLookupDaoTest {
                                                     return cache.get(key);
                                                 }
                                             },
-                new CustomDatabaseConfig());
+                new ShardingBundleOptions());
         transactionDao = new CacheableRelationalDao<>(sessionFactories,
                                                       Transaction.class,
                                                       new ShardCalculator<>(shardManager,

@@ -18,14 +18,18 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
-import io.appform.dropwizard.sharding.config.CustomDatabaseConfig;
+import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
+import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
+import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.LockMode;
@@ -150,7 +154,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     @Getter
     private final ShardCalculator<String> shardCalculator;
     @Getter
-    private final CustomDatabaseConfig customDatabaseConfig;
+    private final ShardingBundleOptions shardingOptions;
     private final Field keyField;
 
     /**
@@ -163,11 +167,11 @@ public class LookupDao<T> implements ShardedDao<T> {
             List<SessionFactory> sessionFactories,
             Class<T> entityClass,
             ShardCalculator<String> shardCalculator,
-            CustomDatabaseConfig customDatabaseConfig) {
+            ShardingBundleOptions shardingOptions) {
         this.daos = sessionFactories.stream().map(LookupDaoPriv::new).collect(Collectors.toList());
         this.entityClass = entityClass;
         this.shardCalculator = shardCalculator;
-        this.customDatabaseConfig = customDatabaseConfig;
+        this.shardingOptions = shardingOptions;
 
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
         Preconditions.checkArgument(fields.length != 0, "At least one field needs to be sharding key");
@@ -308,14 +312,14 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,  dao.sessionFactory, key -> dao.getLocked(key, LockMode.NONE),
-                null, id, customDatabaseConfig.isSkipReadOnlyTransaction());
+                null, id, shardingOptions.isSkipReadOnlyTransaction());
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId, dao.sessionFactory, key -> dao.getLocked(key, LockMode.NONE),
-                entityPopulator, id, customDatabaseConfig.isSkipReadOnlyTransaction());
+                entityPopulator, id, shardingOptions.isSkipReadOnlyTransaction());
     }
 
     public LockedContext<T> saveAndGetExecutor(T entity) {
@@ -409,4 +413,110 @@ public class LookupDao<T> implements ShardedDao<T> {
         return this.keyField;
     }
 
+    @Getter
+    public static class ReadOnlyContext<T> {
+        private final int shardId;
+        private final SessionFactory sessionFactory;
+        private final Function<String, T> getter;
+        private final Supplier<Boolean> entityPopulator;
+        private final String key;
+        private final List<Function<T, Void>> operations = Lists.newArrayList();
+        private final boolean skipTransaction;
+
+        public ReadOnlyContext(
+                int shardId,
+                SessionFactory sessionFactory,
+                Function<String, T> getter,
+                Supplier<Boolean> entityPopulator,
+                String key,
+                boolean skipTxn) {
+            this.shardId = shardId;
+            this.sessionFactory = sessionFactory;
+            this.getter = getter;
+            this.entityPopulator = entityPopulator;
+            this.key = key;
+            this.skipTransaction = skipTxn;
+        }
+
+
+        public ReadOnlyContext<T> apply(Function<T, Void> handler) {
+            this.operations.add(handler);
+            return this;
+        }
+
+
+        public <U> ReadOnlyContext<T> readOneAugmentParent(
+                RelationalDao<U> relationalDao,
+                DetachedCriteria criteria,
+                BiConsumer<T, List<U>> consumer) {
+            return readAugmentParent(relationalDao, criteria, 0, 1, consumer, p -> true);
+        }
+
+        public <U> ReadOnlyContext<T> readAugmentParent(
+                RelationalDao<U> relationalDao,
+                DetachedCriteria criteria,
+                int first,
+                int numResults,
+                BiConsumer<T, List<U>> consumer) {
+            return readAugmentParent(relationalDao, criteria, first, numResults, consumer, p -> true);
+        }
+
+        public <U> ReadOnlyContext<T> readOneAugmentParent(
+                RelationalDao<U> relationalDao,
+                DetachedCriteria criteria,
+                BiConsumer<T, List<U>> consumer,
+                Predicate<T> filter) {
+            return readAugmentParent(relationalDao, criteria, 0, 1, consumer, filter);
+        }
+
+        public <U> ReadOnlyContext<T> readAugmentParent(
+                RelationalDao<U> relationalDao,
+                DetachedCriteria criteria,
+                int first,
+                int numResults,
+                BiConsumer<T, List<U>> consumer,
+                Predicate<T> filter) {
+            return apply(parent -> {
+                if (filter.test(parent)) {
+                    try {
+                        consumer.accept(parent, relationalDao.select(this, criteria, first, numResults));
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                return null;
+            });
+        }
+
+        public Optional<T> execute() {
+            var result = executeImpl();
+            if (null == result
+                    && null != entityPopulator
+                    && Boolean.TRUE.equals(entityPopulator.get())) {//Try to populate entity (maybe from cold store etc)
+                result = executeImpl();
+            }
+            return Optional.ofNullable(result);
+        }
+
+        private T executeImpl() {
+            TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
+            transactionHandler.beforeStart();
+            try {
+                T result = getter.apply(key);
+                if (null == result) {
+                    return null;
+                }
+                operations.forEach(operation -> operation.apply(result));
+                return result;
+            }
+            catch (Exception e) {
+                transactionHandler.onError();
+                throw e;
+            }
+            finally {
+                transactionHandler.afterEnd();
+            }
+        }
+    }
 }

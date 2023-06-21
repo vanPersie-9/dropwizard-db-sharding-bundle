@@ -44,4 +44,7 @@ public class ShardedHibernateFactory {
     @Valid
     private BlacklistConfig blacklist;
 
+    @Valid
+    private ShardingBundleOptions shardingOptions;
+
 }

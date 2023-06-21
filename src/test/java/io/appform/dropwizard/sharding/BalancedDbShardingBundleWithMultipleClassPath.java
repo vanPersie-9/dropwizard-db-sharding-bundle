@@ -18,7 +18,7 @@
 package io.appform.dropwizard.sharding;
 
 import io.appform.dropwizard.sharding.caching.LookupCache;
-import io.appform.dropwizard.sharding.config.CustomDatabaseConfig;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -63,8 +63,8 @@ public class BalancedDbShardingBundleWithMultipleClassPath extends DBShardingBun
             }
 
             @Override
-            protected CustomDatabaseConfig getCustomDatabaseConfig() {
-                return new CustomDatabaseConfig(true);
+            protected ShardingBundleOptions getShardingOptions() {
+                return testConfig.getShardingOptions();
             }
         };
     }

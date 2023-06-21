@@ -247,7 +247,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
-    <U> List<T> select(ReadOnlyContext<U> context, DetachedCriteria criteria, int first, int numResults) throws Exception {
+    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int first, int numResults) throws Exception {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         SelectParamPriv selectParam = SelectParamPriv.builder()
                 .criteria(criteria)
