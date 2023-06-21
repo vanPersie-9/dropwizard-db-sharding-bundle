@@ -311,15 +311,23 @@ public class LookupDao<T> implements ShardedDao<T> {
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new ReadOnlyContext<>(shardId,  dao.sessionFactory, key -> dao.getLocked(key, LockMode.NONE),
-                null, id, shardingOptions.isSkipReadOnlyTransaction());
+        return new ReadOnlyContext<>(shardId,
+                dao.sessionFactory,
+                key -> dao.getLocked(key, LockMode.NONE),
+                null,
+                id,
+                shardingOptions.isSkipReadOnlyTransaction());
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new ReadOnlyContext<>(shardId, dao.sessionFactory, key -> dao.getLocked(key, LockMode.NONE),
-                entityPopulator, id, shardingOptions.isSkipReadOnlyTransaction());
+        return new ReadOnlyContext<>(shardId,
+                dao.sessionFactory,
+                key -> dao.getLocked(key, LockMode.NONE),
+                entityPopulator,
+                id,
+                shardingOptions.isSkipReadOnlyTransaction());
     }
 
     public LockedContext<T> saveAndGetExecutor(T entity) {
