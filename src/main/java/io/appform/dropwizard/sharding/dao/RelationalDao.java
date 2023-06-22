@@ -18,9 +18,7 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
-import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
@@ -46,9 +44,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /**

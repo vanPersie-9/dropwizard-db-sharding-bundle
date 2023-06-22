@@ -20,6 +20,7 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -86,8 +87,9 @@ public class LookupDaoTest {
         final ShardCalculator<String> shardCalculator = new ShardCalculator<>(shardManager,
                                                                               new ConsistentHashBucketIdExtractor<>(
                                                                                       shardManager));
-        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator);
-        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator);
+        final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
+        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator, shardingOptions);
+        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions);
         transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator);
         auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator);
     }
