@@ -19,6 +19,9 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.scroll.FieldComparator;
+import io.appform.dropwizard.sharding.scroll.ScrollPointer;
+import io.appform.dropwizard.sharding.scroll.ScrollResult;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
@@ -26,6 +29,7 @@ import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import lombok.var;
@@ -36,6 +40,7 @@ import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
+import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
@@ -45,6 +50,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
@@ -85,7 +91,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         T getLockedForWrite(String lookupKey) {
-            return getLockedForWrite(lookupKey, x->x);
+            return getLockedForWrite(lookupKey, x -> x);
         }
 
         T getLockedForWrite(String lookupKey, UnaryOperator<Criteria> criteriaUpdater) {
@@ -132,6 +138,12 @@ public class LookupDao<T> implements ShardedDao<T> {
             return list(criteria.getExecutableCriteria(currentSession()));
         }
 
+        List<T> select(DetachedCriteria criteria, int start, int count) {
+            return list(criteria.getExecutableCriteria(currentSession())
+                                .setFirstResult(start)
+                                .setMaxResults(count));
+        }
+
         long count(DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
                     .setProjection(Projections.rowCount())
@@ -142,7 +154,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * Delete an object
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, x->x, LockMode.UPGRADE_NOWAIT))
+            return Optional.ofNullable(getLocked(id, x -> x, LockMode.UPGRADE_NOWAIT))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
@@ -215,7 +227,8 @@ public class LookupDao<T> implements ShardedDao<T> {
 
     /**
      * Get an object on the basis of key (value of field annotated with {@link LookupKey}) from any shard
-     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get function.
+     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get
+     * function.
      * <b>Note:</b> The transaction is open when handler is applied. So lazy loading will work inside the handler.
      * Once get returns, lazy loading will nt owrok.
      *
@@ -252,7 +265,8 @@ public class LookupDao<T> implements ShardedDao<T> {
      * Saves an entity on proper shard based on hash of the value in the key field in the object.
      * The updated entity is returned. If Cascade is specified, this can be used
      * to save an object tree based on the shard of the top entity that has the key field.
-     * <b>Note:</b> Lazy loading will not work on the augmented entity. Use the alternate {@link #save(Object, Function)} for that.
+     * <b>Note:</b> Lazy loading will not work on the augmented entity. Use the alternate
+     * {@link #save(Object, Function)} for that.
      *
      * @param entity Entity to save
      * @return Entity
@@ -264,7 +278,8 @@ public class LookupDao<T> implements ShardedDao<T> {
 
     /**
      * Save an object on the basis of key (value of field annotated with {@link LookupKey}) to target shard
-     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get function.
+     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get
+     * function.
      * <b>Note:</b> Handler is executed in the same transactional context as the save operation.
      * So any updates made to the object in this context will also get persisted.
      *
@@ -326,7 +341,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
-        return readOnlyExecutor(id, x->x);
+        return readOnlyExecutor(id, x -> x);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, UnaryOperator<Criteria> criteriaUpdater) {
@@ -338,7 +353,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
-        return readOnlyExecutor(id, x->x, entityPopulator);
+        return readOnlyExecutor(id, x -> x, entityPopulator);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(
@@ -383,6 +398,43 @@ public class LookupDao<T> implements ShardedDao<T> {
                 throw new RuntimeException(e);
             }
         }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    /**
+     * Provides a scroll api for records across shards. It is important to provide a sort field that is perpetually
+     * increasing.
+     *
+     * @param criteria      The core criteria for the query
+     * @param existing      Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param countPerShard Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * countPerShard elements
+     */
+    public ScrollResult<T> forwardScroll(
+            DetachedCriteria criteria,
+            final ScrollPointer existing,
+            int countPerShard,
+            @NonNull final String sortFieldName) {
+        val existingPoint = existing == null ? new ScrollPointer() : existing;
+        val sortField = FieldUtils.getField(this.entityClass, sortFieldName, true);
+        criteria.addOrder(Order.asc(sortFieldName));
+        val daoIndex = new AtomicInteger();
+        val results = daos.stream()
+                .map(dao -> {
+                    val idxValue = daoIndex.get();
+                    val result = Transactions.execute(dao.sessionFactory, true,
+                                                      queryCriteria -> dao.select(queryCriteria,
+                                                                                  existingPoint.getCurrOffset(idxValue),
+                                                                                  countPerShard), criteria);
+                    existingPoint.advance(idxValue, Math.min(countPerShard, result.size()));
+                    daoIndex.incrementAndGet();
+                    return result;
+                })
+                .flatMap(Collection::stream)
+                .sorted(new FieldComparator<>(sortField))
+                .collect(Collectors.toList());
+        return new ScrollResult<>(existingPoint, results);
     }
 
     /**
