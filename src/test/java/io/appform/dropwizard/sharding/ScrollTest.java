@@ -30,7 +30,7 @@ import java.util.stream.IntStream;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Tests out functionality for {@link LookupDao#forwardScroll(DetachedCriteria, ScrollPointer, int, String)}
+ * Tests out functionality for {@link LookupDao#since(DetachedCriteria, ScrollPointer, int, String)}
  */
 @Slf4j
 public class ScrollTest {
@@ -52,7 +52,7 @@ public class ScrollTest {
 
     @Test
     public void testScrollSorted() {
-        val numEntities = 4;
+        val numEntities = 400;
         val ids = new HashSet<String>();
         val entities = new HashSet<String>();
 
@@ -73,10 +73,10 @@ public class ScrollTest {
         var result = (ScrollResult<ScrollTestEntity>)null;
         var pointer = (ScrollPointer)null;
         do {
-            result = lookupDao.forwardScroll(DetachedCriteria.forClass(ScrollTestEntity.class),
-                                             pointer,
-                                             10,
-                                             "id");
+            result = lookupDao.since(DetachedCriteria.forClass(ScrollTestEntity.class),
+                                     pointer,
+                                     10,
+                                     "id");
             result.getResult().forEach(r -> entities.add(r.getExternalId()));
             pointer = result.getPointer();
             log.info("Received {} entities", result.getResult().size());
@@ -101,10 +101,10 @@ public class ScrollTest {
         If it is not such a field, the results of scroll would be wrong for obvious reasons
         */
         do {
-            result = lookupDao.forwardScroll(DetachedCriteria.forClass(ScrollTestEntity.class),
-                                             pointer,
-                                             10,
-                                             "id");
+            result = lookupDao.since(DetachedCriteria.forClass(ScrollTestEntity.class),
+                                     pointer,
+                                     10,
+                                     "id");
             result.getResult().forEach(r -> entities.add(r.getExternalId()));
             pointer = result.getPointer();
             log.info("Received {} entities", result.getResult().size());

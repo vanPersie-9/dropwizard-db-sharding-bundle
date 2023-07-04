@@ -1,11 +1,14 @@
 package io.appform.dropwizard.sharding.scroll;
 
+import lombok.ToString;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Private data structure for scroll point
  */
+@ToString
 public class ScrollPointer {
     private final Map<Integer, Integer> pointPerShard = new ConcurrentHashMap<>();
 

@@ -18,10 +18,12 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.scroll.FieldComparator;
 import io.appform.dropwizard.sharding.scroll.ScrollPointer;
 import io.appform.dropwizard.sharding.scroll.ScrollResult;
+import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
@@ -406,35 +408,44 @@ public class LookupDao<T> implements ShardedDao<T> {
      *
      * @param criteria      The core criteria for the query
      * @param existing      Existing {@link ScrollPointer}, should be null at start of a scroll session
-     * @param countPerShard Count of records per shard
+     * @param pageSize Count of records per shard
      * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
      * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
-     * max N * countPerShard elements
+     * max N * pageSize elements
      */
-    public ScrollResult<T> forwardScroll(
+    public ScrollResult<T> since(
             DetachedCriteria criteria,
             final ScrollPointer existing,
-            int countPerShard,
+            int pageSize,
             @NonNull final String sortFieldName) {
+        log.debug("SCROLL POINTER: {}", existing);
         val existingPoint = existing == null ? new ScrollPointer() : existing;
         val sortField = FieldUtils.getField(this.entityClass, sortFieldName, true);
         criteria.addOrder(Order.asc(sortFieldName));
         val daoIndex = new AtomicInteger();
         val results = daos.stream()
-                .map(dao -> {
+                .flatMap(dao -> {
                     val idxValue = daoIndex.get();
                     val result = Transactions.execute(dao.sessionFactory, true,
                                                       queryCriteria -> dao.select(queryCriteria,
                                                                                   existingPoint.getCurrOffset(idxValue),
-                                                                                  countPerShard), criteria);
-                    existingPoint.advance(idxValue, Math.min(countPerShard, result.size()));
+                                                                                  pageSize), criteria)
+                            .stream()
+                            .map(item -> new ScrollResultItem<>(item, idxValue));
+
                     daoIndex.incrementAndGet();
                     return result;
                 })
-                .flatMap(Collection::stream)
-                .sorted(new FieldComparator<>(sortField))
+                .sorted(new FieldComparator<T>(sortField).thenComparing(ScrollResultItem::getShardIdx))
+                .limit(pageSize)
                 .collect(Collectors.toList());
-        return new ScrollResult<>(existingPoint, results);
+        //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
+        val outputBuilder = ImmutableList.<T>builder();
+        results.forEach(result -> {
+            outputBuilder.add(result.getData());
+            existingPoint.advance(result.getShardIdx(), 1); //Only shards from which data have been selected will get advanced
+        });
+        return new ScrollResult<>(existingPoint, outputBuilder.build());
     }
 
 
