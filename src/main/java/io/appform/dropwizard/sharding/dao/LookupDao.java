@@ -414,12 +414,12 @@ public class LookupDao<T> implements ShardedDao<T> {
      * max N * pageSize elements
      */
     public ScrollResult<T> since(
-            DetachedCriteria criteria,
+            final DetachedCriteria criteria,
             final ScrollPointer existing,
-            int pageSize,
+            final int pageSize,
             @NonNull final String sortFieldName) {
         log.debug("SCROLL POINTER: {}", existing);
-        val existingPoint = existing == null ? new ScrollPointer() : existing;
+        val existingPointer = existing == null ? new ScrollPointer() : existing;
         val sortField = FieldUtils.getField(this.entityClass, sortFieldName, true);
         criteria.addOrder(Order.asc(sortFieldName));
         val daoIndex = new AtomicInteger();
@@ -428,7 +428,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                     val idxValue = daoIndex.get();
                     val result = Transactions.execute(dao.sessionFactory, true,
                                                       queryCriteria -> dao.select(queryCriteria,
-                                                                                  existingPoint.getCurrOffset(idxValue),
+                                                                                  existingPointer.getCurrOffset(idxValue),
                                                                                   pageSize), criteria)
                             .stream()
                             .map(item -> new ScrollResultItem<>(item, idxValue));
@@ -443,9 +443,9 @@ public class LookupDao<T> implements ShardedDao<T> {
         val outputBuilder = ImmutableList.<T>builder();
         results.forEach(result -> {
             outputBuilder.add(result.getData());
-            existingPoint.advance(result.getShardIdx(), 1); //Only shards from which data have been selected will get advanced
+            existingPointer.advance(result.getShardIdx(), 1); //Only shards from which data have been selected will get advanced
         });
-        return new ScrollResult<>(existingPoint, outputBuilder.build());
+        return new ScrollResult<>(existingPointer, outputBuilder.build());
     }
 
 
