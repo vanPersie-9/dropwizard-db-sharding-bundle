@@ -62,7 +62,7 @@ public class CacheableLookupDao<T> extends LookupDao<T> {
         if(cache.exists(key)) {
             return Optional.of(cache.get(key));
         }
-        T entity = super.get(key, t -> t);
+        T entity = super.get(key, x->x, t -> t);
         if(entity != null) {
             cache.put(key, entity);
         }

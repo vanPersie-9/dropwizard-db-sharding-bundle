@@ -31,6 +31,7 @@ import lombok.val;
 import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.hibernate.Criteria;
 import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
@@ -76,24 +77,34 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T get(String lookupKey) {
-            return getLocked(lookupKey, LockMode.READ);
+            return getLocked(lookupKey, x -> x, LockMode.READ);
+        }
+
+        T get(String lookupKey, UnaryOperator<Criteria> criteriaUpdater) {
+            return getLocked(lookupKey, criteriaUpdater, LockMode.READ);
         }
 
         T getLockedForWrite(String lookupKey) {
-            return getLocked(lookupKey, LockMode.UPGRADE_NOWAIT);
+            return getLockedForWrite(lookupKey, x->x);
+        }
+
+        T getLockedForWrite(String lookupKey, UnaryOperator<Criteria> criteriaUpdater) {
+            return getLocked(lookupKey, criteriaUpdater, LockMode.UPGRADE_NOWAIT);
         }
 
         /**
          * Get an element from the shard.
          *
-         * @param lookupKey Id of the object
+         * @param lookupKey       Id of the object
+         * @param criteriaUpdater
          * @return Extracted element or null if not found.
          */
-        T getLocked(String lookupKey, LockMode lockMode) {
-            return uniqueResult(currentSession()
-                                        .createCriteria(entityClass)
-                                        .add(Restrictions.eq(keyField.getName(), lookupKey))
-                                        .setLockMode(lockMode));
+        T getLocked(String lookupKey, UnaryOperator<Criteria> criteriaUpdater, LockMode lockMode) {
+            Criteria criteria = criteriaUpdater.apply(currentSession()
+                                                              .createCriteria(entityClass)
+                                                              .add(Restrictions.eq(keyField.getName(), lookupKey))
+                                                              .setLockMode(lockMode));
+            return uniqueResult(criteria);
         }
 
         /**
@@ -131,7 +142,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * Delete an object
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, LockMode.UPGRADE_NOWAIT))
+            return Optional.ofNullable(getLocked(id, x->x, LockMode.UPGRADE_NOWAIT))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
@@ -195,7 +206,11 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @throws Exception if backing dao throws
      */
     public Optional<T> get(String key) throws Exception {
-        return Optional.ofNullable(get(key, t -> t));
+        return Optional.ofNullable(get(key, x -> x, t -> t));
+    }
+
+    public Optional<T> get(String key, UnaryOperator<Criteria> criteriaUpdater) throws Exception {
+        return Optional.ofNullable(get(key, criteriaUpdater, t -> t));
     }
 
     /**
@@ -213,6 +228,13 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(key);
         LookupDaoPriv dao = daos.get(shardId);
         return Transactions.execute(dao.sessionFactory, true, dao::get, key, handler);
+    }
+
+    @SuppressWarnings("java:S112")
+    public <U> U get(String key, UnaryOperator<Criteria> criteriaUpdater, Function<T, U> handler) throws Exception {
+        int shardId = shardCalculator.shardId(key);
+        LookupDaoPriv dao = daos.get(shardId);
+        return Transactions.execute(dao.sessionFactory, true, k -> dao.get(k, criteriaUpdater), key, handler);
     }
 
     /**
@@ -304,17 +326,30 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
+        return readOnlyExecutor(id, x->x);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(String id, UnaryOperator<Criteria> criteriaUpdater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new ReadOnlyContext<>(shardId, dao.sessionFactory, key -> dao.getLocked(key, LockMode.NONE), null, id);
+        return new ReadOnlyContext<>(shardId, dao.sessionFactory, key -> dao.getLocked(key,
+                                                                                       criteriaUpdater,
+                                                                                       LockMode.NONE), null, id);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
+        return readOnlyExecutor(id, x->x, entityPopulator);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(
+            String id,
+            UnaryOperator<Criteria> criteriaUpdater,
+            Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                                      dao.sessionFactory,
-                                     key -> dao.getLocked(key, LockMode.NONE),
+                                     key -> dao.getLocked(key, criteriaUpdater, LockMode.NONE),
                                      entityPopulator,
                                      id);
     }
