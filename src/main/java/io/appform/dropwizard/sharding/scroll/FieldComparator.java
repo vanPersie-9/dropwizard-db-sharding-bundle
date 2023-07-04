@@ -7,7 +7,7 @@ import java.lang.reflect.Field;
 import java.util.Comparator;
 
 /**
- *
+ * A {@link Comparator} that is used by scroll api for sorting results from multiple shards
  */
 public class FieldComparator<T> implements Comparator<T> {
     private final Field field;
@@ -18,16 +18,16 @@ public class FieldComparator<T> implements Comparator<T> {
 
     @SneakyThrows
     @Override
+    @SuppressWarnings("unchecked")
     public int compare(T lhs, T rhs) {
-        val lhsValue = (Comparable)field.get(lhs);
-        val rhsValue = (Comparable) field.get(rhs);
+        val lhsValue = (Comparable<T>)field.get(lhs);
         if(lhsValue == null) {
             return -1;
         }
-        if(rhsValue == null) {
+        if(rhs == null) {
             return 1;
         }
 
-        return lhsValue.compareTo(rhsValue);
+        return lhsValue.compareTo(rhs);
     }
 }

@@ -437,6 +437,8 @@ public class LookupDao<T> implements ShardedDao<T> {
         return new ScrollResult<>(existingPoint, results);
     }
 
+
+
     /**
      * Queries using the specified criteria across all shards and returns the counts of rows satisfying the criteria.
      * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
