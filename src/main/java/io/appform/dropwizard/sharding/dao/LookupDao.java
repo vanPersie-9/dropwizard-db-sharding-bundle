@@ -20,38 +20,27 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import io.appform.dropwizard.sharding.scroll.FieldComparator;
-import io.appform.dropwizard.sharding.scroll.ScrollPointer;
-import io.appform.dropwizard.sharding.scroll.ScrollResult;
-import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
+import io.appform.dropwizard.sharding.scroll.*;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
+import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
-import lombok.Getter;
-import lombok.NonNull;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
-import lombok.val;
-import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Criteria;
 import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.criterion.DetachedCriteria;
-import org.hibernate.criterion.Order;
-import org.hibernate.criterion.Projections;
-import org.hibernate.criterion.Restrictions;
+import org.hibernate.criterion.*;
 import org.hibernate.query.Query;
 
 import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 import java.util.stream.Collectors;
@@ -141,9 +130,14 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         List<T> select(DetachedCriteria criteria, int start, int count) {
-            return list(criteria.getExecutableCriteria(currentSession())
-                                .setFirstResult(start)
-                                .setMaxResults(count));
+            val executableCriteria = criteria.getExecutableCriteria(currentSession());
+            if (-1 != start) {
+                executableCriteria.setFirstResult(start);
+            }
+            if (-1 != count) {
+                executableCriteria.setMaxResults(count);
+            }
+            return list(executableCriteria);
         }
 
         long count(DetachedCriteria criteria) {
@@ -386,9 +380,9 @@ public class LookupDao<T> implements ShardedDao<T> {
 
     /**
      * Queries using the specified criteria across all shards and returns the result.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     * <b>Note:</b> This method runs the query serially, and it's usage is not recommended.
      *
-     * @param criteria The selct criteria
+     * @param criteria The select criteria
      * @return List of elements or empty if none match
      */
     public List<T> scatterGather(DetachedCriteria criteria) {
@@ -403,56 +397,115 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Provides a scroll api for records across shards. It is important to provide a sort field that is perpetually
-     * increasing.
+     * Provides a scroll api for records across shards. This api will scroll down in ascending order of the
+     * 'sortFieldName' field. Newly added records can be polled by passing the pointer repeatedly. If nothing new is
+     * available, it will return an empty in {@link ScrollResult#getResult()}.
+     * If the passed pointer is null, it will return the first pageSize records with a pointer to be passed to get the
+     * next pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll down
      *
-     * @param criteria      The core criteria for the query
-     * @param existing      Existing {@link ScrollPointer}, should be null at start of a scroll session
-     * @param pageSize Count of records per shard
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer      Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
      * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
      * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
      * max N * pageSize elements
      */
-    public ScrollResult<T> since(
-            final DetachedCriteria criteria,
-            final ScrollPointer existing,
+    public ScrollResult<T> scrollDown(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
             final int pageSize,
             @NonNull final String sortFieldName) {
-        log.debug("SCROLL POINTER: {}", existing);
-        val existingPointer = existing == null ? new ScrollPointer() : existing;
-        val sortField = FieldUtils.getField(this.entityClass, sortFieldName, true);
-        criteria.addOrder(Order.asc(sortFieldName));
+        log.debug("SCROLL POINTER: {}", inPointer);
+        val pointer = inPointer == null ? new ScrollPointer(ScrollPointer.Direction.DOWN) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.DOWN),
+                                    "A down scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.asc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .thenComparing(ScrollResultItem::getShardIdx));
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll down in descending order of the
+     * 'sortFieldName' field.
+     * As this api goes back in order, newly added records will not be available in the scroll.
+     * If the passed pointer is null, it will return the last pageSize records with a pointer to be passed to get the
+     * previous pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll up
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer      Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    @SneakyThrows
+    public ScrollResult<T> scrollUp(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        val pointer = null == inPointer ? new ScrollPointer(ScrollPointer.Direction.UP) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.UP),
+                                    "An up scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.desc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .reversed()
+                                  .thenComparing(ScrollResultItem::getShardIdx));
+    }
+
+    @SneakyThrows
+    private ScrollResult<T> scrollImpl(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer pointer,
+            final int pageSize,
+            final UnaryOperator<DetachedCriteria> criteriaMutator,
+            final Comparator<ScrollResultItem<T>> comparator) {
         val daoIndex = new AtomicInteger();
         val results = daos.stream()
                 .flatMap(dao -> {
-                    val idxValue = daoIndex.get();
-                    val result = Transactions.execute(dao.sessionFactory, true,
-                                                      queryCriteria -> dao.select(queryCriteria,
-                                                                                  existingPointer.getCurrOffset(idxValue),
-                                                                                  pageSize), criteria)
+                    val currIdx = daoIndex.getAndIncrement();
+                    val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
+                    return Transactions.execute(dao.sessionFactory,
+                                                true,
+                                                queryCriteria -> dao.select(
+                                                        queryCriteria,
+                                                        pointer.getCurrOffset(currIdx),
+                                                        pageSize),
+                                                criteria)
                             .stream()
-                            .map(item -> new ScrollResultItem<>(item, idxValue));
-
-                    daoIndex.incrementAndGet();
-                    return result;
+                            .map(item -> new ScrollResultItem<>(item, currIdx));
                 })
-                .sorted(new FieldComparator<T>(sortField).thenComparing(ScrollResultItem::getShardIdx))
+                .sorted(comparator)
                 .limit(pageSize)
                 .collect(Collectors.toList());
         //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
         val outputBuilder = ImmutableList.<T>builder();
         results.forEach(result -> {
             outputBuilder.add(result.getData());
-            existingPointer.advance(result.getShardIdx(), 1); //Only shards from which data have been selected will get advanced
+            pointer.advance(result.getShardIdx(), 1);// will get advanced
         });
-        return new ScrollResult<>(existingPointer, outputBuilder.build());
+        return new ScrollResult<>(pointer, outputBuilder.build());
     }
-
-
 
     /**
      * Queries using the specified criteria across all shards and returns the counts of rows satisfying the criteria.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     * <b>Note:</b> This method runs the query serially
      *
      * @param criteria The select criteria
      * @return List of counts in each shard
@@ -616,4 +669,5 @@ public class LookupDao<T> implements ShardedDao<T> {
             }
         }
     }
+
 }
