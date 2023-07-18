@@ -20,7 +20,9 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
+import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -30,6 +32,7 @@ import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import lombok.val;
+import org.checkerframework.checker.units.qual.A;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -40,7 +43,9 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -88,10 +93,15 @@ public class LookupDaoTest {
                                                                               new ConsistentHashBucketIdExtractor<>(
                                                                                       shardManager));
         final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
-        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator, shardingOptions);
-        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions);
-        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator);
-        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator);
+        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
+        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator, shardingOptions,
+               shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions,
+                shardInfoProvider, new ArrayList<>());
+        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator,
+                shardInfoProvider, new ArrayList<>());
+        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator,
+                shardInfoProvider, new ArrayList<>());
     }
 
     @After
