@@ -105,7 +105,8 @@ public class Transactions {
                 .opType(opType)
                 .shardName(shardInfoProvider.shardName(shardId))
                 .build();
-        transactionListeners.get(shardId).forEach(transactionListener -> transactionListener.beforeExecute(listenerContext));
+        val listeners = transactionListeners.get(shardId);
+        TransactionListenerExecutor.beforeExecute(listeners, listenerContext);
         TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, readOnly);
         if (completeTransaction) {
             transactionHandler.beforeStart();
@@ -116,13 +117,13 @@ public class Transactions {
             if (completeTransaction) {
                 transactionHandler.afterEnd();
             }
-            transactionListeners.get(shardId).forEach(transactionListener -> transactionListener.afterExecute(listenerContext));
+            TransactionListenerExecutor.afterExecute(listeners, listenerContext);
             return returnValue;
         } catch (Exception e) {
             if (completeTransaction) {
                 transactionHandler.onError();
             }
-            transactionListeners.get(shardId).forEach(transactionListener -> transactionListener.afterException(listenerContext, e));
+            TransactionListenerExecutor.afterException(listeners, listenerContext, e);
             throw e;
         }
     }

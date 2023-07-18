@@ -11,6 +11,9 @@ public class TransactionListenerExecutor {
 
     public void beforeExecute(final List<TransactionListener> transactionListeners,
                               final ListenerContext listenerContext) {
+        if(transactionListeners == null) {
+            return;
+        }
         transactionListeners.forEach(transactionListener -> {
             try {
                 transactionListener.beforeExecute(listenerContext);
@@ -22,6 +25,9 @@ public class TransactionListenerExecutor {
 
     public void afterExecute(final List<TransactionListener> transactionListeners,
                              final ListenerContext listenerContext) {
+        if(transactionListeners == null) {
+            return;
+        }
         transactionListeners.forEach(transactionListener -> {
             try {
                 transactionListener.afterExecute(listenerContext);
@@ -34,6 +40,9 @@ public class TransactionListenerExecutor {
     public void afterException(final List<TransactionListener> transactionListeners,
                                final ListenerContext listenerContext,
                                final Throwable throwable) {
+        if(transactionListeners == null) {
+            return;
+        }
         transactionListeners.forEach(transactionListener -> {
             try {
                 transactionListener.afterException(listenerContext, throwable);
