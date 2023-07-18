@@ -18,7 +18,6 @@
 package io.appform.dropwizard.sharding.utils;
 
 import io.appform.dropwizard.sharding.ShardInfoProvider;
-import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.listeners.ListenerContext;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
 import io.appform.dropwizard.sharding.listeners.TransactionListenerExecutor;
@@ -56,7 +55,7 @@ public class Transactions {
                 .collect(Collectors.toMap(shardId -> shardId, shardId -> {
                     val shardName = shardInfoProvider.shardName(shardId);
                     return transactionListenerFactories.stream().map(listenerFactory ->
-                            listenerFactory.createListener(LookupDao.class, entityClass, shardName)).collect(Collectors.toList());
+                            listenerFactory.createListener(daoClass, entityClass, shardName)).collect(Collectors.toList());
                 }));
         this.shardInfoProvider = shardInfoProvider;
     }

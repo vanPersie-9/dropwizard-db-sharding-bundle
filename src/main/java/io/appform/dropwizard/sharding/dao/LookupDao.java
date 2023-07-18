@@ -191,7 +191,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         this.shardingOptions = shardingOptions;
         this.listenerFactories = listenerFactories;
         this.shardInfoProvider = shardInfoProvider;
-        this.transactionExecutor = new Transactions(shardInfoProvider, LookupDao.class, entityClass, listenerFactories,
+        this.transactionExecutor = new Transactions(shardInfoProvider, getClass(), entityClass, listenerFactories,
                 sessionFactories.size());
 
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
@@ -492,7 +492,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                     .entityClass(entityClass)
                     .build();
             this.listeners = listenerFactories.stream().map(listenerFactory ->
-                    listenerFactory.createListener(ReadOnlyContext.class, entityClass, shardName))
+                    listenerFactory.createListener(getClass(), entityClass, shardName))
                     .collect(Collectors.toList());
 
         }

@@ -10,6 +10,7 @@ import org.mockito.Mockito;
 public class TransactionListenerExecutorTest {
 
     private TransactionListener transactionListener;
+
     @Before
     public void setup() {
         this.transactionListener = Mockito.mock(TransactionListener.class);
