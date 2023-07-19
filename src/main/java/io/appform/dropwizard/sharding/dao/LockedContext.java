@@ -7,10 +7,7 @@ import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 
 import java.util.List;
-import java.util.function.BooleanSupplier;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 @Getter
 public class LockedContext<T> {
@@ -120,7 +117,7 @@ public class LockedContext<T> {
     public <U> LockedContext<T> createOrUpdate(
             RelationalDao<U> relationalDao,
             DetachedCriteria criteria,
-            Function<U, U> updater,
+            UnaryOperator<U> updater,
             Supplier<U> entityGenerator) {
         return apply(parent -> {
             try {

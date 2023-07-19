@@ -292,6 +292,31 @@ public class LookupDao<T> implements ShardedDao<T> {
         return Transactions.execute(dao.sessionFactory, false, dao::save, entity, handler);
     }
 
+    public Optional<T> createOrUpdate(String id,
+                               UnaryOperator<T> updater,
+                               Supplier<T> entityGenerator) {
+        val shardId = shardCalculator.shardId(id);
+        val dao = daos.get(shardId);
+        return Optional.of(Transactions.execute(dao.sessionFactory,
+                             false,
+                             dao::getLockedForWrite,
+                             id,
+                             result -> {
+                                if(null == result) {
+                                    val newEntity = entityGenerator.get();
+                                    if(null != newEntity) {
+                                        return dao.save(newEntity);
+                                    }
+                                    return null;
+                                }
+                                 val updated = updater.apply(result);
+                                if(null != updated) {
+                                    dao.update(updated);
+                                }
+                                return dao.get(id);
+                             }));
+    }
+
     public boolean updateInLock(String id, Function<Optional<T>, T> updater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);

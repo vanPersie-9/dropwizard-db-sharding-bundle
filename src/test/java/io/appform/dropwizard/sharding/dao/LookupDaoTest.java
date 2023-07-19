@@ -20,10 +20,7 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
-import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
-import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
-import io.appform.dropwizard.sharding.dao.testdata.entities.Transaction;
+import io.appform.dropwizard.sharding.dao.testdata.entities.*;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
@@ -50,6 +47,7 @@ public class LookupDaoTest {
 
     private List<SessionFactory> sessionFactories = Lists.newArrayList();
     private LookupDao<TestEntity> lookupDao;
+    private LookupDao<TestEntityWithAIId> lookupDaoForAI;
     private LookupDao<Phone> phoneDao;
     private RelationalDao<Transaction> transactionDao;
     private RelationalDao<Audit> auditDao;
@@ -66,13 +64,14 @@ public class LookupDaoTest {
         configuration.setProperty("hibernate.show_sql", "true");
         configuration.setProperty("hibernate.format_sql", "true");
         configuration.addAnnotatedClass(TestEntity.class);
+        configuration.addAnnotatedClass(TestEntityWithAIId.class);
         configuration.addAnnotatedClass(Phone.class);
         configuration.addAnnotatedClass(Transaction.class);
         configuration.addAnnotatedClass(Audit.class);
 
         StandardServiceRegistry serviceRegistry
                 = new StandardServiceRegistryBuilder().applySettings(
-                configuration.getProperties())
+                        configuration.getProperties())
                 .build();
         return configuration.buildSessionFactory(serviceRegistry);
     }
@@ -87,6 +86,7 @@ public class LookupDaoTest {
                                                                               new ConsistentHashBucketIdExtractor<>(
                                                                                       shardManager));
         lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator);
+        lookupDaoForAI = new LookupDao<>(sessionFactories, TestEntityWithAIId.class, shardCalculator);
         phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator);
         transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator);
         auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator);
@@ -144,6 +144,30 @@ public class LookupDaoTest {
         });
 
         assertFalse(updateStatus);
+    }
+
+    @Test
+    public void testCreateOrUpdate() {
+        val saved = lookupDaoForAI.createOrUpdate("testId",
+                                                  e -> e.setText("Some Other Text"),
+                                                  () -> TestEntityWithAIId.builder()
+                                                          .externalId("testId")
+                                                          .text("Some New Text")
+                                                          .build())
+                .orElse(null);
+        assertNotNull(saved);
+        assertEquals("Some New Text", saved.getText());
+
+        val updated = lookupDaoForAI.createOrUpdate("testId",
+                                                    e -> e.setText("Some Other Text"),
+                                                    () -> TestEntityWithAIId.builder()
+                                                            .externalId("testId")
+                                                            .text("Some New Text")
+                                                            .build())
+                .orElse(null);
+        assertNotNull(updated);
+        assertEquals(saved.getId(), updated.getId());
+        assertEquals("Some Other Text", updated.getText());
     }
 
     @Test
@@ -208,7 +232,7 @@ public class LookupDaoTest {
         int rowsUpdated = lookupDao.updateUsingQuery(id, UpdateOperationMeta.builder()
                 .queryName("testTextUpdateQuery")
                 .params(ImmutableMap.of("externalId", id,
-                        "text", newText))
+                                        "text", newText))
                 .build());
         assertEquals(1, rowsUpdated);
 
@@ -230,7 +254,7 @@ public class LookupDaoTest {
         int rowsUpdated = lookupDao.updateUsingQuery(id, UpdateOperationMeta.builder()
                 .queryName("testTextUpdateQuery")
                 .params(ImmutableMap.of("externalId", UUID.randomUUID().toString(),
-                        "text", newText))
+                                        "text", newText))
                 .build());
         assertEquals(0, rowsUpdated);
 
@@ -356,8 +380,8 @@ public class LookupDaoTest {
 
         Assert.assertEquals(
                 0L,
-                (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
-        );
+                (long) lookupDao.count(criteria).stream().reduce(0L, Long::sum)
+                           );
 
         TestEntity testEntity = TestEntity.builder()
                 .externalId("testId2")
@@ -370,15 +394,15 @@ public class LookupDaoTest {
 
         Assert.assertEquals(
                 2L,
-                (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
-        );
+                (long) lookupDao.count(criteria).stream().reduce(0L, Long::sum)
+                           );
 
 
         lookupDao.delete("testId2");
         Assert.assertEquals(
                 1L,
-                (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
-        );
+                (long) lookupDao.count(criteria).stream().reduce(0L, Long::sum)
+                           );
 
     }
 }
