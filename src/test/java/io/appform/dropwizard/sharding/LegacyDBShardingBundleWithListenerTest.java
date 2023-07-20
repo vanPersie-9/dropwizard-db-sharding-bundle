@@ -12,6 +12,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -31,12 +32,12 @@ public class LegacyDBShardingBundleWithListenerTest extends DBShardingBundleTest
             }
 
             @Override
-            protected List<TransactionListenerFactory> getTransactionListenerFactories() {
+            protected Collection<TransactionListenerFactory> getTransactionListenerFactories() {
                 return allEntitiesListenerFactories;
             }
 
             @Override
-            protected Map<Class<?>, List<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
+            protected Map<Class<?>, Collection<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
                 return ImmutableMap.of(OrderItem.class, orderListenerFactories);
             }
         };

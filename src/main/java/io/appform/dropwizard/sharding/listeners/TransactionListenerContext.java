@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
-public class ListenerContext {
+public class TransactionListenerContext {
     private Class<?> entityClass;
     private Class<?> daoClass;
     private String shardName;

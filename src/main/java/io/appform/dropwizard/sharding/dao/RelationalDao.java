@@ -21,7 +21,7 @@ import com.google.common.base.Preconditions;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
-import io.appform.dropwizard.sharding.utils.Transactions;
+import io.appform.dropwizard.sharding.utils.TransactionExecutor;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
 import lombok.Getter;
@@ -144,7 +144,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     private final ShardCalculator<String> shardCalculator;
     private final Field keyField;
 
-    private final Transactions transactionExecutor;
+    private final TransactionExecutor transactionExecutor;
     private final ShardInfoProvider shardInfoProvider;
     private final List<TransactionListenerFactory> listenerFactories;
 
@@ -165,7 +165,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         this.entityClass = entityClass;
         this.shardInfoProvider = shardInfoProvider;
         this.listenerFactories = listenerFactories;
-        this.transactionExecutor = new Transactions(shardInfoProvider, getClass(), entityClass, listenerFactories,
+        this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, listenerFactories,
                 sessionFactories.size());
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, Id.class);
         Preconditions.checkArgument(fields.length != 0, "A field needs to be designated as @Id");

@@ -10,26 +10,28 @@ import org.mockito.Mockito;
 public class TransactionListenerExecutorTest {
 
     private TransactionListener transactionListener;
+    private TransactionListenerExecutor transactionListenerExecutor;
 
     @Before
     public void setup() {
         this.transactionListener = Mockito.mock(TransactionListener.class);
+        this.transactionListenerExecutor = new TransactionListenerExecutor(Lists.newArrayList(transactionListener));
     }
 
     @Test
     public void testBeforeExecute() {
-        val listenerContext = ListenerContext.builder().build();
+        val listenerContext = TransactionListenerContext.builder().build();
         Mockito.doNothing().when(transactionListener).beforeExecute(listenerContext);
 
         try {
-            TransactionListenerExecutor.beforeExecute(Lists.newArrayList(transactionListener), ListenerContext.builder().build());
+            transactionListenerExecutor.beforeExecute(TransactionListenerContext.builder().build());
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
         }
 
         Mockito.doThrow(new RuntimeException()).when(transactionListener).beforeExecute(listenerContext);
         try {
-            TransactionListenerExecutor.beforeExecute(Lists.newArrayList(transactionListener), ListenerContext.builder().build());
+            transactionListenerExecutor.beforeExecute(TransactionListenerContext.builder().build());
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
         }
@@ -37,18 +39,18 @@ public class TransactionListenerExecutorTest {
 
     @Test
     public void testAfterExecute() {
-        val listenerContext = ListenerContext.builder().build();
+        val listenerContext = TransactionListenerContext.builder().build();
         Mockito.doNothing().when(transactionListener).afterExecute(listenerContext);
 
         try {
-            TransactionListenerExecutor.afterExecute(Lists.newArrayList(transactionListener), ListenerContext.builder().build());
+            transactionListenerExecutor.afterExecute(TransactionListenerContext.builder().build());
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
         }
 
         Mockito.doThrow(new RuntimeException()).when(transactionListener).afterExecute(listenerContext);
         try {
-            TransactionListenerExecutor.afterExecute(Lists.newArrayList(transactionListener), ListenerContext.builder().build());
+            transactionListenerExecutor.afterExecute(TransactionListenerContext.builder().build());
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
         }
@@ -56,12 +58,12 @@ public class TransactionListenerExecutorTest {
 
     @Test
     public void testAfterException() {
-        val listenerContext = ListenerContext.builder().build();
+        val listenerContext = TransactionListenerContext.builder().build();
         val exception = new RuntimeException();
         Mockito.doNothing().when(transactionListener).afterException(listenerContext, exception);
 
         try {
-            TransactionListenerExecutor.afterException(Lists.newArrayList(transactionListener), ListenerContext.builder().build(),
+            transactionListenerExecutor.afterException(TransactionListenerContext.builder().build(),
                     exception);
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
@@ -69,8 +71,7 @@ public class TransactionListenerExecutorTest {
 
         Mockito.doThrow(new RuntimeException()).when(transactionListener).afterException(listenerContext, exception);
         try {
-            TransactionListenerExecutor.afterException(Lists.newArrayList(transactionListener), ListenerContext.builder().build(),
-                    exception);
+            transactionListenerExecutor.afterException(TransactionListenerContext.builder().build(), exception);
         } catch (Exception e) {
             Assert.fail("Exception was not expected");
         }

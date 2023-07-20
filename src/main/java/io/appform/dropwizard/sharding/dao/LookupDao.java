@@ -21,15 +21,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
-import io.appform.dropwizard.sharding.listeners.ListenerContext;
-import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerContext;
 import io.appform.dropwizard.sharding.listeners.TransactionListenerExecutor;
 import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
+import io.appform.dropwizard.sharding.utils.TransactionExecutor;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
-import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -166,7 +165,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     private final ShardingBundleOptions shardingOptions;
     private final Field keyField;
 
-    private final Transactions transactionExecutor;
+    private final TransactionExecutor transactionExecutor;
 
     private final List<TransactionListenerFactory> listenerFactories;
 
@@ -191,7 +190,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         this.shardingOptions = shardingOptions;
         this.listenerFactories = listenerFactories;
         this.shardInfoProvider = shardInfoProvider;
-        this.transactionExecutor = new Transactions(shardInfoProvider, getClass(), entityClass, listenerFactories,
+        this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, listenerFactories,
                 sessionFactories.size());
 
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
@@ -465,8 +464,8 @@ public class LookupDao<T> implements ShardedDao<T> {
         private final String key;
         private final List<Function<T, Void>> operations = Lists.newArrayList();
         private final boolean skipTransaction;
-        private final List<TransactionListener> listeners;
-        private final ListenerContext listenerContext;
+        private final TransactionListenerContext listenerContext;
+        private final TransactionListenerExecutor transactionListenerExecutor;
 
         public ReadOnlyContext(
                 int shardId,
@@ -485,15 +484,16 @@ public class LookupDao<T> implements ShardedDao<T> {
             this.key = key;
             this.skipTransaction = skipTxn;
             val shardName = shardInfoProvider.shardName(shardId);
-            this.listenerContext = ListenerContext.builder()
+            this.listenerContext = TransactionListenerContext.builder()
                     .opType("execute")
                     .shardName(shardName)
                     .daoClass(getClass())
                     .entityClass(entityClass)
                     .build();
-            this.listeners = listenerFactories.stream().map(listenerFactory ->
-                    listenerFactory.createListener(getClass(), entityClass, shardName))
+            val listeners = listenerFactories.stream().map(listenerFactory ->
+                            listenerFactory.createListener(getClass(), entityClass, shardName))
                     .collect(Collectors.toList());
+            this.transactionListenerExecutor = new TransactionListenerExecutor(listeners);
 
         }
 
@@ -559,7 +559,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         private T executeImpl() {
-            TransactionListenerExecutor.beforeExecute(listeners, listenerContext);
+            transactionListenerExecutor.beforeExecute(listenerContext);
             TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
             transactionHandler.beforeStart();
             try {
@@ -568,11 +568,11 @@ public class LookupDao<T> implements ShardedDao<T> {
                     return null;
                 }
                 operations.forEach(operation -> operation.apply(result));
-                TransactionListenerExecutor.afterExecute(listeners, listenerContext);
+                transactionListenerExecutor.afterExecute(listenerContext);
                 return result;
             }
             catch (Exception e) {
-                TransactionListenerExecutor.afterException(listeners, listenerContext, e);
+                transactionListenerExecutor.afterException(listenerContext, e);
                 transactionHandler.onError();
                 throw e;
             }

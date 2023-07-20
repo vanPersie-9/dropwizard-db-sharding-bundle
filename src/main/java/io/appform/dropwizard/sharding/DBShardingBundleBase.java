@@ -59,6 +59,7 @@ import org.reflections.Reflections;
 import javax.persistence.Entity;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,7 +156,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         val entityListenerFactories = getEntityTransactionListenerFactories();
         inEntities.forEach(entity -> {
             listenerFactories.put(entity, new ArrayList<>(listenerFactoriesForAllEntities));
-            if(entityListenerFactories.containsKey(entity)) {
+            if (entityListenerFactories.containsKey(entity)) {
                 listenerFactories.get(entity).addAll(entityListenerFactories.get(entity));
             }
         });
@@ -206,11 +207,12 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardedHibernateFactory getConfig(T config);
 
-    protected List<TransactionListenerFactory> getTransactionListenerFactories() {
+    // TODO: are these needed?
+    protected Collection<TransactionListenerFactory> getTransactionListenerFactories() {
         return Lists.newArrayList();
     }
 
-    protected Map<Class<?>, List<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
+    protected Map<Class<?>, Collection<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
         return Maps.newHashMap();
     }
 
@@ -220,7 +222,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private ShardingBundleOptions getShardingOptions(T configuration) {
         val shardingOptions = getConfig(configuration).getShardingOptions();
-        return  Objects.nonNull(shardingOptions) ? shardingOptions : new ShardingBundleOptions();
+        return Objects.nonNull(shardingOptions) ? shardingOptions : new ShardingBundleOptions();
     }
 
     public <EntityType, T extends Configuration>
