@@ -20,6 +20,7 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
+import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntityWithAIKey;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
@@ -30,6 +31,7 @@ import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
+import org.hibernate.criterion.Property;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,6 +46,7 @@ public class RelationalDaoTest {
 
     private List<SessionFactory> sessionFactories = Lists.newArrayList();
     private RelationalDao<RelationalEntity> relationalDao;
+    private RelationalDao<RelationalEntityWithAIKey> relationalWithAIDao;
 
     private SessionFactory buildSessionFactory(String dbName) {
         Configuration configuration = new Configuration();
@@ -55,10 +58,11 @@ public class RelationalDaoTest {
         configuration.setProperty("hibernate.hbm2ddl.auto", "create");
         configuration.setProperty("hibernate.current_session_context_class", "managed");
         configuration.addAnnotatedClass(RelationalEntity.class);
+        configuration.addAnnotatedClass(RelationalEntityWithAIKey.class);
 
         StandardServiceRegistry serviceRegistry
                 = new StandardServiceRegistryBuilder().applySettings(
-                configuration.getProperties())
+                        configuration.getProperties())
                 .build();
         return configuration.buildSessionFactory(serviceRegistry);
     }
@@ -73,6 +77,11 @@ public class RelationalDaoTest {
                                             RelationalEntity.class,
                                             new ShardCalculator<>(shardManager,
                                                                   new ConsistentHashBucketIdExtractor<>(shardManager)));
+        relationalWithAIDao = new RelationalDao<>(sessionFactories,
+                                                  RelationalEntityWithAIKey.class,
+                                                  new ShardCalculator<>(shardManager,
+                                                                       new ConsistentHashBucketIdExtractor<>(
+                                                                               shardManager)));
     }
 
     @After
@@ -98,6 +107,34 @@ public class RelationalDaoTest {
                                                                10);
         assertEquals(2, entities.size());
 
+    }
+
+    @Test
+    public void testCreateOrUpdate() throws Exception {
+        val saved = relationalWithAIDao.createOrUpdate("parent",
+                                                       DetachedCriteria.forClass(RelationalEntityWithAIKey.class)
+                                                              .add(Property.forName("key").eq("testId")),
+                                                                   e -> e.setValue("Some Other Text"),
+                                                                   () -> RelationalEntityWithAIKey.builder()
+                                                                           .key("testId")
+                                                                           .value("Some New Text")
+                                                                           .build())
+                                                              .orElse(null);
+        assertNotNull(saved);
+        assertEquals("Some New Text", saved.getValue());
+
+        val updated = relationalWithAIDao.createOrUpdate("parent",
+                                                         DetachedCriteria.forClass(RelationalEntityWithAIKey.class)
+                                                                 .add(Property.forName("key").eq("testId")),
+                                                         e -> e.setValue("Some Other Text"),
+                                                         () -> RelationalEntityWithAIKey.builder()
+                                                                 .key("testId")
+                                                                 .value("Some New Text")
+                                                                 .build())
+                .orElse(null);;
+        assertNotNull(updated);
+        assertEquals(saved.getId(), updated.getId());
+        assertEquals("Some Other Text", updated.getValue());
     }
 
     @Test
@@ -128,12 +165,12 @@ public class RelationalDaoTest {
 
         val newValue = UUID.randomUUID().toString();
         int rowsUpdated = relationalDao.updateUsingQuery(relationalKey,
-                UpdateOperationMeta.builder()
-                        .queryName("testUpdateUsingKeyTwo")
-                        .params(ImmutableMap.of("keyTwo", "2",
-                                "value", newValue))
-                        .build()
-        );
+                                                         UpdateOperationMeta.builder()
+                                                                 .queryName("testUpdateUsingKeyTwo")
+                                                                 .params(ImmutableMap.of("keyTwo", "2",
+                                                                                         "value", newValue))
+                                                                 .build()
+                                                        );
         assertEquals(2, rowsUpdated);
 
         val persistedEntityTwo = relationalDao.get(relationalKey, "2").orElse(null);
@@ -175,12 +212,14 @@ public class RelationalDaoTest {
 
         val newValue = UUID.randomUUID().toString();
         int rowsUpdated = relationalDao.updateUsingQuery(relationalKey,
-                UpdateOperationMeta.builder()
-                        .queryName("testUpdateUsingKeyTwo")
-                        .params(ImmutableMap.of("keyTwo", UUID.randomUUID().toString(),
-                                "value", newValue))
-                        .build()
-        );
+                                                         UpdateOperationMeta.builder()
+                                                                 .queryName("testUpdateUsingKeyTwo")
+                                                                 .params(ImmutableMap.of("keyTwo",
+                                                                                         UUID.randomUUID().toString(),
+                                                                                         "value",
+                                                                                         newValue))
+                                                                 .build()
+                                                        );
         assertEquals(0, rowsUpdated);
 
 
