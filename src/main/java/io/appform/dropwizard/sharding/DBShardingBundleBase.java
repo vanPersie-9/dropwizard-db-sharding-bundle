@@ -207,7 +207,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardedHibernateFactory getConfig(T config);
 
-    // TODO: are these needed?
     protected Collection<TransactionListenerFactory> getTransactionListenerFactories() {
         return Lists.newArrayList();
     }
