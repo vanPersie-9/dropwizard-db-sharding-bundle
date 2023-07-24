@@ -97,21 +97,23 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     @Getter
     private Map<Class<?>, List<TransactionListenerFactory>> listenerFactories;
 
+    private final List<Class<?>> entities;
+
     protected DBShardingBundleBase(
             String dbNamespace,
             Class<?> entity,
             Class<?>... entities) {
         this.dbNamespace = dbNamespace;
-        val inEntities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
-        init(inEntities);
+        this.entities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
+        init();
     }
 
     protected DBShardingBundleBase(String dbNamespace, List<String> classPathPrefixList) {
         this.dbNamespace = dbNamespace;
         Set<Class<?>> entities = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
         Preconditions.checkArgument(!entities.isEmpty(), String.format("No entity class found at %s", String.join(",", classPathPrefixList)));
-        val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
-        init(inEntities);
+        this.entities = ImmutableList.<Class<?>>builder().addAll(entities).build();
+        init();
     }
 
     protected DBShardingBundleBase(Class<?> entity, Class<?>... entities) {
@@ -124,7 +126,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardManager createShardManager(int numShards, ShardBlacklistingStore blacklistingStore);
 
-    private void init(final ImmutableList<Class<?>> inEntities) {
+    private void init() {
         boolean defaultNamespace = StringUtils.equalsIgnoreCase(dbNamespace, DEFAULT_NAMESPACE);
         val numShardsProperty = defaultNamespace ? SHARD_ENV : String.join(".", dbNamespace, SHARD_ENV);
         String numShardsEnv = System.getProperty(numShardsProperty, DEFAULT_SHARDS);
@@ -133,10 +135,10 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         this.shardManager = createShardManager(numShards, blacklistingStore);
         this.shardInfoProvider = new ShardInfoProvider(dbNamespace);
         this.healthCheckManager = new HealthCheckManager(dbNamespace, shardInfoProvider, blacklistingStore, shardManager);
-        populateTransactionListenerFactories(inEntities);
+        populateTransactionListenerFactories(entities);
 
         IntStream.range(0, numShards).forEach(
-                shard -> shardBundles.add(new HibernateBundle<T>(inEntities, new SessionFactoryFactory()) {
+                shard -> shardBundles.add(new HibernateBundle<T>(entities, new SessionFactoryFactory()) {
                     @Override
                     protected String name() {
                         return shardInfoProvider.shardName(shard);
@@ -150,7 +152,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         );
     }
 
-    private void populateTransactionListenerFactories(final ImmutableList<Class<?>> inEntities) {
+    private void populateTransactionListenerFactories(final List<Class<?>> inEntities) {
         this.listenerFactories = new HashMap<>();
         val listenerFactoriesForAllEntities = getTransactionListenerFactories();
         val entityListenerFactories = getEntityTransactionListenerFactories();
@@ -213,6 +215,13 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected Map<Class<?>, Collection<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
         return Maps.newHashMap();
+    }
+
+    public void addTransactionListenerFactories(Collection<TransactionListenerFactory> factories) {
+        entities.forEach(entity -> {
+            listenerFactories.computeIfAbsent(entity, key -> new ArrayList<>());
+            listenerFactories.get(entity).addAll(factories);
+        });
     }
 
     protected ShardBlacklistingStore getBlacklistingStore() {
