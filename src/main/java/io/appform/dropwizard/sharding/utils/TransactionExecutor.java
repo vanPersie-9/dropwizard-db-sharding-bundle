@@ -108,7 +108,7 @@ public class TransactionExecutor {
                 .opType(opType)
                 .shardName(shardInfoProvider.shardName(shardId))
                 .build();
-        val listenerExecutor = transactionListenerExecutors.get(shardId);
+        val listenerExecutor = transactionListenerExecutors.getOrDefault(shardId, new TransactionListenerExecutor());
         listenerExecutor.beforeExecute(listenerContext);
         val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
         if (completeTransaction) {
@@ -138,7 +138,7 @@ public class TransactionExecutor {
                 .opType(opType)
                 .shardName(shardInfoProvider.shardName(shardId))
                 .build();
-        val listenerExecutor = transactionListenerExecutors.get(shardId);
+        val listenerExecutor = transactionListenerExecutors.getOrDefault(shardId, new TransactionListenerExecutor());
         listenerExecutor.beforeExecute(listenerContext);
         val transactionHandler = new TransactionHandler(sessionFactory, true);
         transactionHandler.beforeStart();

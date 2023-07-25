@@ -1,5 +1,6 @@
 package io.appform.dropwizard.sharding.listeners;
 
+import com.google.common.collect.ImmutableList;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -11,6 +12,10 @@ public class TransactionListenerExecutor {
 
     public TransactionListenerExecutor(final List<TransactionListener> transactionListeners) {
         this.transactionListeners = transactionListeners;
+    }
+
+    public TransactionListenerExecutor() {
+        this(ImmutableList.of());
     }
 
     public void beforeExecute(final TransactionListenerContext listenerContext) {
