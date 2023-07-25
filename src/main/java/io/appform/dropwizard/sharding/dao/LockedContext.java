@@ -12,6 +12,7 @@ import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -79,6 +80,7 @@ public class LockedContext<T> {
                                                    final ShardInfoProvider shardInfoProvider) {
         return listenerFactories.stream().map(listenerFactory ->
                         listenerFactory.createListener(LockedContext.class, entityClass, shardInfoProvider.shardName(shardId)))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 

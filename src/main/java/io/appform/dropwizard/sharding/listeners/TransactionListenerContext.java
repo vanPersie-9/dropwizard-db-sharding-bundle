@@ -1,18 +1,14 @@
 package io.appform.dropwizard.sharding.listeners;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Value;
 
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
+@Value
 public class TransactionListenerContext {
-    private Class<?> entityClass;
-    private Class<?> daoClass;
-    private String shardName;
-    private String opType;
-    private String lockedContextMode;
+    Class<?> entityClass;
+    Class<?> daoClass;
+    String shardName;
+    String opType;
+    String lockedContextMode;
 }

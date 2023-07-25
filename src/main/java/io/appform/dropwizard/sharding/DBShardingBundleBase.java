@@ -21,7 +21,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import io.appform.dropwizard.sharding.admin.BlacklistShardTask;
 import io.appform.dropwizard.sharding.admin.UnblacklistShardTask;
 import io.appform.dropwizard.sharding.caching.LookupCache;
@@ -60,7 +59,6 @@ import javax.persistence.Entity;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -95,25 +93,23 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     private HealthCheckManager healthCheckManager;
 
     @Getter
-    private Map<Class<?>, List<TransactionListenerFactory>> listenerFactories;
-
-    private final List<Class<?>> entities;
+    private final List<TransactionListenerFactory> listenerFactories = new ArrayList<>();
 
     protected DBShardingBundleBase(
             String dbNamespace,
             Class<?> entity,
             Class<?>... entities) {
         this.dbNamespace = dbNamespace;
-        this.entities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
-        init();
+        val inEntities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
+        init(inEntities);
     }
 
     protected DBShardingBundleBase(String dbNamespace, List<String> classPathPrefixList) {
         this.dbNamespace = dbNamespace;
         Set<Class<?>> entities = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
         Preconditions.checkArgument(!entities.isEmpty(), String.format("No entity class found at %s", String.join(",", classPathPrefixList)));
-        this.entities = ImmutableList.<Class<?>>builder().addAll(entities).build();
-        init();
+        val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
+        init(inEntities);
     }
 
     protected DBShardingBundleBase(Class<?> entity, Class<?>... entities) {
@@ -126,7 +122,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardManager createShardManager(int numShards, ShardBlacklistingStore blacklistingStore);
 
-    private void init() {
+    private void init(final ImmutableList<Class<?>> inEntities) {
         boolean defaultNamespace = StringUtils.equalsIgnoreCase(dbNamespace, DEFAULT_NAMESPACE);
         val numShardsProperty = defaultNamespace ? SHARD_ENV : String.join(".", dbNamespace, SHARD_ENV);
         String numShardsEnv = System.getProperty(numShardsProperty, DEFAULT_SHARDS);
@@ -135,10 +131,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         this.shardManager = createShardManager(numShards, blacklistingStore);
         this.shardInfoProvider = new ShardInfoProvider(dbNamespace);
         this.healthCheckManager = new HealthCheckManager(dbNamespace, shardInfoProvider, blacklistingStore, shardManager);
-        populateTransactionListenerFactories(entities);
-
         IntStream.range(0, numShards).forEach(
-                shard -> shardBundles.add(new HibernateBundle<T>(entities, new SessionFactoryFactory()) {
+                shard -> shardBundles.add(new HibernateBundle<T>(inEntities, new SessionFactoryFactory()) {
                     @Override
                     protected String name() {
                         return shardInfoProvider.shardName(shard);
@@ -150,18 +144,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                     }
                 })
         );
-    }
-
-    private void populateTransactionListenerFactories(final List<Class<?>> inEntities) {
-        this.listenerFactories = new HashMap<>();
-        val listenerFactoriesForAllEntities = getTransactionListenerFactories();
-        val entityListenerFactories = getEntityTransactionListenerFactories();
-        inEntities.forEach(entity -> {
-            listenerFactories.put(entity, new ArrayList<>(listenerFactoriesForAllEntities));
-            if (entityListenerFactories.containsKey(entity)) {
-                listenerFactories.get(entity).addAll(entityListenerFactories.get(entity));
-            }
-        });
     }
 
     @Override
@@ -209,19 +191,12 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardedHibernateFactory getConfig(T config);
 
-    protected Collection<TransactionListenerFactory> getTransactionListenerFactories() {
-        return Lists.newArrayList();
+    public void registerTransactionListenerFactories(final Collection<TransactionListenerFactory> factories) {
+        listenerFactories.addAll(factories);
     }
 
-    protected Map<Class<?>, Collection<TransactionListenerFactory>> getEntityTransactionListenerFactories() {
-        return Maps.newHashMap();
-    }
-
-    public void addTransactionListenerFactories(Collection<TransactionListenerFactory> factories) {
-        entities.forEach(entity -> {
-            listenerFactories.computeIfAbsent(entity, key -> new ArrayList<>());
-            listenerFactories.get(entity).addAll(factories);
-        });
+    public void registerTransactionListenerFactory(final TransactionListenerFactory factory) {
+        listenerFactories.add(factory);
     }
 
     protected ShardBlacklistingStore getBlacklistingStore() {
@@ -239,7 +214,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 this.shardingOptions,
                 shardInfoProvider,
-                listenerFactories.get(clazz));
+                listenerFactories);
     }
 
     public <EntityType, T extends Configuration>
@@ -248,7 +223,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new CacheableLookupDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 cacheManager, this.shardingOptions,
-                shardInfoProvider, listenerFactories.get(clazz));
+                shardInfoProvider, listenerFactories);
     }
 
     public <EntityType, T extends Configuration>
@@ -256,7 +231,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                 BucketIdExtractor<String> bucketIdExtractor) {
         return new LookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), this.shardingOptions,
                 shardInfoProvider,
-                listenerFactories.get(clazz));
+                listenerFactories);
     }
 
     public <EntityType, T extends Configuration>
@@ -265,7 +240,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          LookupCache<EntityType> cacheManager) {
         return new CacheableLookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
                 cacheManager, this.shardingOptions, shardInfoProvider,
-                listenerFactories.get(clazz));
+                listenerFactories);
     }
 
 
@@ -273,7 +248,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz) {
         return new RelationalDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                shardInfoProvider, listenerFactories.get(clazz));
+                shardInfoProvider, listenerFactories);
     }
 
 
@@ -284,7 +259,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 new ShardCalculator<>(this.shardManager,
                         new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 cacheManager,
-                shardInfoProvider, listenerFactories.get(clazz));
+                shardInfoProvider, listenerFactories);
     }
 
 
@@ -292,7 +267,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz,
                                                      BucketIdExtractor<String> bucketIdExtractor) {
         return new RelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
-                shardInfoProvider, listenerFactories.get(clazz));
+                shardInfoProvider, listenerFactories);
     }
 
     public <EntityType, T extends Configuration>
@@ -300,7 +275,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                               BucketIdExtractor<String> bucketIdExtractor,
                                                               RelationalCache<EntityType> cacheManager) {
         return new CacheableRelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), cacheManager,
-                shardInfoProvider, listenerFactories.get(clazz));
+                shardInfoProvider, listenerFactories);
     }
 
 

@@ -48,6 +48,7 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -492,6 +493,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                     .build();
             val listeners = listenerFactories.stream().map(listenerFactory ->
                             listenerFactory.createListener(getClass(), entityClass, shardName))
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
             this.transactionListenerExecutor = new TransactionListenerExecutor(listeners);
 

@@ -27,6 +27,7 @@ import org.hibernate.SessionFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -55,7 +56,9 @@ public class TransactionExecutor {
                 .collect(Collectors.toMap(shardId -> shardId, shardId -> {
                     val shardName = shardInfoProvider.shardName(shardId);
                     val listeners = transactionListenerFactories.stream().map(listenerFactory ->
-                            listenerFactory.createListener(daoClass, entityClass, shardName)).collect(Collectors.toList());
+                                    listenerFactory.createListener(daoClass, entityClass, shardName))
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
                     return new TransactionListenerExecutor(listeners);
                 }));
     }
@@ -107,7 +110,7 @@ public class TransactionExecutor {
                 .build();
         val listenerExecutor = transactionListenerExecutors.get(shardId);
         listenerExecutor.beforeExecute(listenerContext);
-        TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, readOnly);
+        val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
         if (completeTransaction) {
             transactionHandler.beforeStart();
         }
@@ -137,7 +140,7 @@ public class TransactionExecutor {
                 .build();
         val listenerExecutor = transactionListenerExecutors.get(shardId);
         listenerExecutor.beforeExecute(listenerContext);
-        TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true);
+        val transactionHandler = new TransactionHandler(sessionFactory, true);
         transactionHandler.beforeStart();
         try {
             T result = handler.apply(transactionHandler.getSession());

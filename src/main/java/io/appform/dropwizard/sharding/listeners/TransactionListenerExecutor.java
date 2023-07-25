@@ -21,7 +21,7 @@ public class TransactionListenerExecutor {
             try {
                 transactionListener.beforeExecute(listenerContext);
             } catch (Throwable e) {
-                log.error(String.format("Error running before execute of listener: %s", transactionListener.getClass()), e);
+                log.error("Error running before execute of listener: " + transactionListener.getClass(), e);
             }
         });
     }
@@ -34,7 +34,7 @@ public class TransactionListenerExecutor {
             try {
                 transactionListener.afterExecute(listenerContext);
             } catch (Throwable e) {
-                log.error(String.format("Error running after execute of listener: %s", transactionListener.getClass()), e);
+                log.error("Error running after execute of listener: " + transactionListener.getClass(), e);
             }
         });
     }
@@ -48,7 +48,7 @@ public class TransactionListenerExecutor {
             try {
                 transactionListener.afterException(listenerContext, throwable);
             } catch (Throwable e) {
-                log.error(String.format("Error running after exception of listener: %s", transactionListener.getClass()), e);
+                log.error("Error running after exception of listener: " + transactionListener.getClass(), e);
             }
         });
     }
