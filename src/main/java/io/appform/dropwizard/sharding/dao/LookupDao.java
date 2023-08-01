@@ -566,10 +566,9 @@ public class LookupDao<T> implements ShardedDao<T> {
             transactionHandler.beforeStart();
             try {
                 T result = getter.apply(key);
-                if (null == result) {
-                    return null;
+                if (null != result) {
+                    operations.forEach(operation -> operation.apply(result));
                 }
-                operations.forEach(operation -> operation.apply(result));
                 transactionListenerExecutor.afterExecute(listenerContext);
                 return result;
             }
