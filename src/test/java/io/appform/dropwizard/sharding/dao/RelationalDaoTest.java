@@ -19,6 +19,8 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
+import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntityWithAIKey;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
@@ -73,15 +75,18 @@ public class RelationalDaoTest {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
         }
         final ShardManager shardManager = new BalancedShardManager(sessionFactories.size());
+        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         relationalDao = new RelationalDao<>(sessionFactories,
                                             RelationalEntity.class,
                                             new ShardCalculator<>(shardManager,
-                                                                  new ConsistentHashBucketIdExtractor<>(shardManager)));
+                                                                  new ConsistentHashBucketIdExtractor<>(shardManager)),
+                shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
         relationalWithAIDao = new RelationalDao<>(sessionFactories,
                                                   RelationalEntityWithAIKey.class,
                                                   new ShardCalculator<>(shardManager,
-                                                                       new ConsistentHashBucketIdExtractor<>(
-                                                                               shardManager)));
+                                                                        new ConsistentHashBucketIdExtractor<>(
+                                                                                shardManager)),
+                                                  shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
     }
 
     @After

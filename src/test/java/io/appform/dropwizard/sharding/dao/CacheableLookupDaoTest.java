@@ -19,8 +19,10 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -40,6 +42,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +86,7 @@ public class CacheableLookupDaoTest {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
         }
         final ShardManager shardManager = new BalancedShardManager(sessionFactories.size());
+        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         lookupDao = new CacheableLookupDao<>(
                 sessionFactories,
                 TestEntity.class,
@@ -105,7 +109,8 @@ public class CacheableLookupDaoTest {
                     public TestEntity get(String key) {
                         return cache.get(key);
                     }
-                });
+                },
+                new ShardingBundleOptions(), shardInfoProvider, new ArrayList<>());
         phoneDao = new CacheableLookupDao<>(sessionFactories,
                                             Phone.class,
                                             new ShardCalculator<>(shardManager,
@@ -128,7 +133,8 @@ public class CacheableLookupDaoTest {
                                                 public Phone get(String key) {
                                                     return cache.get(key);
                                                 }
-                                            });
+                                            },
+                new ShardingBundleOptions(), shardInfoProvider, new ArrayList<>());
         transactionDao = new CacheableRelationalDao<>(sessionFactories,
                                                       Transaction.class,
                                                       new ShardCalculator<>(shardManager,
@@ -195,7 +201,7 @@ public class CacheableLookupDaoTest {
                                                                       numResults,
                                                                       ':'));
                                                           }
-                                                      });
+                                                      }, shardInfoProvider, new ArrayList<>());
         auditDao = new CacheableRelationalDao<>(sessionFactories,
                                                 Audit.class,
                                                 new ShardCalculator<>(shardManager,
@@ -249,7 +255,7 @@ public class CacheableLookupDaoTest {
                                                                                                         numResults,
                                                                                                         ':'));
                                                     }
-                                                });
+                                                }, shardInfoProvider, new ArrayList<>());
     }
 
     @After

@@ -1,6 +1,11 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
+import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerContext;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerExecutor;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import lombok.Getter;
 import org.hibernate.SessionFactory;
@@ -8,6 +13,12 @@ import org.hibernate.criterion.DetachedCriteria;
 
 import java.util.List;
 import java.util.function.*;
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 @Getter
 public class LockedContext<T> {
@@ -25,20 +36,53 @@ public class LockedContext<T> {
     private Function<T, T> saver;
     private T entity;
     private final Mode mode;
+    private final TransactionListenerContext listenerContext;
+    private final TransactionListenerExecutor transactionListenerExecutor;
 
-    public LockedContext(int shardId, SessionFactory sessionFactory, Supplier<T> getter) {
+    public LockedContext(int shardId, SessionFactory sessionFactory,
+                         Supplier<T> getter,
+                         Class<T> entityClass,
+                         List<TransactionListenerFactory> listenerFactories,
+                         ShardInfoProvider shardInfoProvider) {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.getter = getter;
         this.mode = Mode.READ;
+        this.listenerContext = getListenerContext(shardInfoProvider, entityClass);
+        this.transactionListenerExecutor = new TransactionListenerExecutor(getListeners(listenerFactories, entityClass, shardInfoProvider));
     }
 
-    public LockedContext(int shardId, SessionFactory sessionFactory, Function<T, T> saver, T entity) {
+    public LockedContext(int shardId, SessionFactory sessionFactory, Function<T, T> saver, T entity,
+                         Class<T> entityClass,
+                         List<TransactionListenerFactory> listenerFactories,
+                         ShardInfoProvider shardInfoProvider) {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.saver = saver;
         this.entity = entity;
         this.mode = Mode.INSERT;
+        this.listenerContext = getListenerContext(shardInfoProvider, entityClass);
+        this.transactionListenerExecutor = new TransactionListenerExecutor(getListeners(listenerFactories, entityClass, shardInfoProvider));
+    }
+
+    private TransactionListenerContext getListenerContext(final ShardInfoProvider shardInfoProvider,
+                                                          final Class<T> entityClass) {
+        return TransactionListenerContext.builder()
+                .shardName(shardInfoProvider.shardName(shardId))
+                .lockedContextMode(mode.name())
+                .entityClass(entityClass)
+                .daoClass(getClass())
+                .opType("execute")
+                .build();
+    }
+
+    private List<TransactionListener> getListeners(final List<TransactionListenerFactory> listenerFactories,
+                                                   final Class<T> entityClass,
+                                                   final ShardInfoProvider shardInfoProvider) {
+        return listenerFactories.stream().map(listenerFactory ->
+                        listenerFactory.createListener(LockedContext.class, entityClass, shardInfoProvider.shardName(shardId)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     public LockedContext<T> mutate(Mutator<T> mutator) {
@@ -159,15 +203,18 @@ public class LockedContext<T> {
     }
 
     public T execute() {
+        transactionListenerExecutor.beforeExecute(listenerContext);
         TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, false);
         transactionHandler.beforeStart();
         try {
             T result = generateEntity();
             operations
                     .forEach(operation -> operation.apply(result));
+            transactionListenerExecutor.afterExecute(listenerContext);
             return result;
         } catch (Exception e) {
             transactionHandler.onError();
+            transactionListenerExecutor.afterException(listenerContext, e);
             throw e;
         } finally {
             transactionHandler.afterEnd();

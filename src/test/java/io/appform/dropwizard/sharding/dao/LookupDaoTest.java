@@ -21,6 +21,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.dao.testdata.entities.*;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
+import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
+import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
+import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
+import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
+import io.appform.dropwizard.sharding.dao.testdata.entities.Transaction;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
@@ -37,6 +44,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -85,11 +93,19 @@ public class LookupDaoTest {
         final ShardCalculator<String> shardCalculator = new ShardCalculator<>(shardManager,
                                                                               new ConsistentHashBucketIdExtractor<>(
                                                                                       shardManager));
-        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator);
-        lookupDaoForAI = new LookupDao<>(sessionFactories, TestEntityWithAIId.class, shardCalculator);
-        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator);
-        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator);
-        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator);
+
+        final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
+        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
+        lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator, shardingOptions,
+               shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+        lookupDaoForAI = new LookupDao<>(sessionFactories, TestEntityWithAIId.class, shardCalculator, shardingOptions,
+                                         shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+        phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions,
+                shardInfoProvider, new ArrayList<>());
+        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator,
+                shardInfoProvider, new ArrayList<>());
+        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator,
+                shardInfoProvider, new ArrayList<>());
     }
 
     @After

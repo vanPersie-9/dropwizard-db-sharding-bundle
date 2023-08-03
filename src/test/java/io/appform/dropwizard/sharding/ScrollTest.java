@@ -2,7 +2,9 @@ package io.appform.dropwizard.sharding;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.LookupDao;
+import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
 import io.appform.dropwizard.sharding.dao.testdata.entities.ScrollTestEntity;
 import io.appform.dropwizard.sharding.scroll.ScrollPointer;
 import io.appform.dropwizard.sharding.scroll.ScrollResult;
@@ -48,7 +50,10 @@ public class ScrollTest {
         final ShardCalculator<String> shardCalculator = new ShardCalculator<>(shardManager,
                                                                               new ConsistentHashBucketIdExtractor<>(
                                                                                       shardManager));
-        lookupDao = new LookupDao<>(sessionFactories, ScrollTestEntity.class, shardCalculator);
+        final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
+        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
+        lookupDao = new LookupDao<>(sessionFactories, ScrollTestEntity.class, shardCalculator, shardingOptions,
+                                    shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
     }
 
     @Test
