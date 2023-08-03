@@ -168,7 +168,7 @@ public abstract class DBShardingBundleTestBase {
         Map<String, Object> blah = Maps.newHashMap();
 
         rDao.get("customer1", generatedId, foundOrder -> {
-            if(null == foundOrder) {
+            if (null == foundOrder) {
                 return Collections.emptyList();
             }
             List<OrderItem> itemList = foundOrder.getItems();
@@ -215,5 +215,4 @@ public abstract class DBShardingBundleTestBase {
                 .stream()
                 .allMatch(status -> status));
     }
-
 }

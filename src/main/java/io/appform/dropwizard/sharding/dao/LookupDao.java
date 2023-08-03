@@ -19,12 +19,16 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerContext;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerExecutor;
+import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
+import io.appform.dropwizard.sharding.utils.TransactionExecutor;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
-import io.appform.dropwizard.sharding.utils.Transactions;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -44,9 +48,14 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * A dao to manage lookup and top level elements in the system. Can save and retrieve an object (tree) from any shard.
@@ -157,6 +166,12 @@ public class LookupDao<T> implements ShardedDao<T> {
     private final ShardingBundleOptions shardingOptions;
     private final Field keyField;
 
+    private final TransactionExecutor transactionExecutor;
+
+    private final List<TransactionListenerFactory> listenerFactories;
+
+    private final ShardInfoProvider shardInfoProvider;
+
     /**
      * Creates a new sharded DAO. The number of managed shards and bucketing is controlled by the {@link ShardManager}.
      *
@@ -167,11 +182,17 @@ public class LookupDao<T> implements ShardedDao<T> {
             List<SessionFactory> sessionFactories,
             Class<T> entityClass,
             ShardCalculator<String> shardCalculator,
-            ShardingBundleOptions shardingOptions) {
+            ShardingBundleOptions shardingOptions,
+            final ShardInfoProvider shardInfoProvider,
+            final List<TransactionListenerFactory> listenerFactories) {
         this.daos = sessionFactories.stream().map(LookupDaoPriv::new).collect(Collectors.toList());
         this.entityClass = entityClass;
         this.shardCalculator = shardCalculator;
         this.shardingOptions = shardingOptions;
+        this.listenerFactories = listenerFactories;
+        this.shardInfoProvider = shardInfoProvider;
+        this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, listenerFactories,
+                sessionFactories.size());
 
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
         Preconditions.checkArgument(fields.length != 0, "At least one field needs to be sharding key");
@@ -217,7 +238,8 @@ public class LookupDao<T> implements ShardedDao<T> {
     public <U> U get(String key, Function<T, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(key);
         LookupDaoPriv dao = daos.get(shardId);
-        return Transactions.execute(dao.sessionFactory, true, dao::get, key, handler);
+        return transactionExecutor.execute(dao.sessionFactory, true, dao::get, key, handler, "get",
+                shardId);
     }
 
     /**
@@ -261,41 +283,44 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(key);
         log.debug("Saving entity of type {} with key {} to shard {}", entityClass.getSimpleName(), key, shardId);
         LookupDaoPriv dao = daos.get(shardId);
-        return Transactions.execute(dao.sessionFactory, false, dao::save, entity, handler);
+        return transactionExecutor.execute(dao.sessionFactory, false, dao::save, entity, handler,
+                "save", shardId);
     }
 
     public boolean updateInLock(String id, Function<Optional<T>, T> updater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return updateImpl(id, dao::getLockedForWrite, updater, dao);
+        return updateImpl(id, dao::getLockedForWrite, updater, shardId);
     }
 
     public boolean update(String id, Function<Optional<T>, T> updater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return updateImpl(id, dao::get, updater, dao);
+        return updateImpl(id, dao::get, updater, shardId);
     }
 
     public int updateUsingQuery(String id, UpdateOperationMeta updateOperationMeta) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return Transactions.execute(dao.sessionFactory, false, dao::update, updateOperationMeta);
+        return transactionExecutor.execute(dao.sessionFactory, false, dao::update, updateOperationMeta,
+                "updateUsingQuery", shardId);
     }
 
     private boolean updateImpl(
             String id,
             Function<String, T> getter,
             Function<Optional<T>, T> updater,
-            LookupDaoPriv dao) {
+            int shardId) {
         try {
-            return Transactions.<T, String, Boolean>execute(dao.sessionFactory, true, getter, id, entity -> {
+            val dao = daos.get(shardId);
+            return transactionExecutor.<T, String, Boolean>execute(dao.sessionFactory, true, getter, id, entity -> {
                 T newEntity = updater.apply(Optional.ofNullable(entity));
                 if (null == newEntity) {
                     return false;
                 }
                 dao.update(newEntity);
                 return true;
-            });
+            }, "updateImpl", shardId);
         }
         catch (Exception e) {
             throw new RuntimeException("Error updating entity: " + id, e);
@@ -305,7 +330,8 @@ public class LookupDao<T> implements ShardedDao<T> {
     public LockedContext<T> lockAndGetExecutor(String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id));
+        return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id),
+                entityClass, listenerFactories, shardInfoProvider);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
@@ -316,7 +342,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 key -> dao.getLocked(key, LockMode.NONE),
                 null,
                 id,
-                shardingOptions.isSkipReadOnlyTransaction());
+                shardingOptions.isSkipReadOnlyTransaction(), listenerFactories,
+                shardInfoProvider, entityClass);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
@@ -327,7 +354,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 key -> dao.getLocked(key, LockMode.NONE),
                 entityPopulator,
                 id,
-                shardingOptions.isSkipReadOnlyTransaction());
+                shardingOptions.isSkipReadOnlyTransaction(), listenerFactories,
+                shardInfoProvider, entityClass);
     }
 
     public LockedContext<T> saveAndGetExecutor(T entity) {
@@ -340,7 +368,8 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return new LockedContext<>(shardId, dao.sessionFactory, dao::save, entity);
+        return new LockedContext<>(shardId, dao.sessionFactory, dao::save, entity,
+                entityClass, listenerFactories, shardInfoProvider);
     }
 
     /**
@@ -351,14 +380,17 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @return List of elements or empty if none match
      */
     public List<T> scatterGather(DetachedCriteria criteria) {
-        return daos.stream().map(dao -> {
-            try {
-                return Transactions.execute(dao.sessionFactory, true, dao::select, criteria);
-            }
-            catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).flatMap(Collection::stream).collect(Collectors.toList());
+        return IntStream.range(0, daos.size())
+                .mapToObj(shardId -> {
+                    try {
+                        val dao = daos.get(shardId);
+                        return transactionExecutor.execute(dao.sessionFactory, true, dao::select, criteria, "scatterGather",
+                                shardId);
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }).flatMap(Collection::stream).collect(Collectors.toList());
     }
 
     /**
@@ -369,14 +401,16 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @return List of counts in each shard
      */
     public List<Long> count(DetachedCriteria criteria) {
-        return daos.stream().map(dao -> {
-            try {
-                return Transactions.execute(dao.sessionFactory, true, dao::count, criteria);
-            }
-            catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).collect(Collectors.toList());
+        return IntStream.range(0, daos.size())
+                .mapToObj(shardId -> {
+                    val dao = daos.get(shardId);
+                    try {
+                        return transactionExecutor.execute(dao.sessionFactory, true, dao::count, criteria, "count", shardId);
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }).collect(Collectors.toList());
     }
 
     /**
@@ -395,10 +429,10 @@ public class LookupDao<T> implements ShardedDao<T> {
             try {
                 DetachedCriteria criteria = DetachedCriteria.forClass(entityClass)
                         .add(Restrictions.in(keyField.getName(), lookupKeysGroupByShards.get(shardId)));
-                return Transactions.execute(daos.get(shardId).sessionFactory,
+                return transactionExecutor.execute(daos.get(shardId).sessionFactory,
                                             true,
                                             daos.get(shardId)::select,
-                                            criteria);
+                                            criteria, "get", shardId);
             }
             catch (Exception e) {
                 throw new RuntimeException(e);
@@ -409,12 +443,13 @@ public class LookupDao<T> implements ShardedDao<T> {
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return Transactions.execute(dao.sessionFactory, handler);
+        return transactionExecutor.execute(dao.sessionFactory, handler, "runInSession", shardId);
     }
 
     public boolean delete(String id) {
         int shardId = shardCalculator.shardId(id);
-        return Transactions.execute(daos.get(shardId).sessionFactory, false, daos.get(shardId)::delete, id);
+        return transactionExecutor.execute(daos.get(shardId).sessionFactory, false, daos.get(shardId)::delete, id, "delete",
+                shardId);
     }
 
     protected Field getKeyField() {
@@ -430,6 +465,8 @@ public class LookupDao<T> implements ShardedDao<T> {
         private final String key;
         private final List<Function<T, Void>> operations = Lists.newArrayList();
         private final boolean skipTransaction;
+        private final TransactionListenerContext listenerContext;
+        private final TransactionListenerExecutor transactionListenerExecutor;
 
         public ReadOnlyContext(
                 int shardId,
@@ -437,13 +474,29 @@ public class LookupDao<T> implements ShardedDao<T> {
                 Function<String, T> getter,
                 Supplier<Boolean> entityPopulator,
                 String key,
-                boolean skipTxn) {
+                boolean skipTxn,
+                final List<TransactionListenerFactory> listenerFactories,
+                final ShardInfoProvider shardInfoProvider,
+                final Class<?> entityClass) {
             this.shardId = shardId;
             this.sessionFactory = sessionFactory;
             this.getter = getter;
             this.entityPopulator = entityPopulator;
             this.key = key;
             this.skipTransaction = skipTxn;
+            val shardName = shardInfoProvider.shardName(shardId);
+            this.listenerContext = TransactionListenerContext.builder()
+                    .opType("execute")
+                    .shardName(shardName)
+                    .daoClass(getClass())
+                    .entityClass(entityClass)
+                    .build();
+            val listeners = listenerFactories.stream().map(listenerFactory ->
+                            listenerFactory.createListener(getClass(), entityClass, shardName))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            this.transactionListenerExecutor = new TransactionListenerExecutor(listeners);
+
         }
 
 
@@ -508,17 +561,19 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         private T executeImpl() {
+            transactionListenerExecutor.beforeExecute(listenerContext);
             TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
             transactionHandler.beforeStart();
             try {
                 T result = getter.apply(key);
-                if (null == result) {
-                    return null;
+                if (null != result) {
+                    operations.forEach(operation -> operation.apply(result));
                 }
-                operations.forEach(operation -> operation.apply(result));
+                transactionListenerExecutor.afterExecute(listenerContext);
                 return result;
             }
             catch (Exception e) {
+                transactionListenerExecutor.afterException(listenerContext, e);
                 transactionHandler.onError();
                 throw e;
             }
