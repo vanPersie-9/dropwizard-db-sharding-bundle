@@ -20,7 +20,9 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
-import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
+import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalInterceptor;
+import io.appform.dropwizard.sharding.dao.interceptors.EntityClassThreadLocalInterceptor;
+import io.appform.dropwizard.sharding.dao.interceptors.InterceptorTestUtil;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
@@ -35,6 +37,7 @@ import org.hibernate.criterion.DetachedCriteria;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.MDC;
 
 import java.util.List;
 import java.util.UUID;
@@ -76,7 +79,7 @@ public class RelationalDaoTest {
                                             RelationalEntity.class,
                                             new ShardCalculator<>(shardManager,
                                                                   new ConsistentHashBucketIdExtractor<>(shardManager)),
-                shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+                shardInfoProvider, Lists.newArrayList(new DaoClassLocalInterceptor(), new EntityClassThreadLocalInterceptor()));
     }
 
     @After
@@ -199,5 +202,19 @@ public class RelationalDaoTest {
         val persistedEntityThree = relationalDao.get(relationalKey, "3").orElse(null);
         assertNotNull(persistedEntityThree);
         assertEquals(entityThree.getValue(), persistedEntityThree.getValue());
+    }
+
+    @Test
+    public void testSaveWithInterceptors() throws Exception {
+        val relationalKey = UUID.randomUUID().toString();
+
+        val entityOne = RelationalEntity.builder()
+                .key("1")
+                .keyTwo("1")
+                .value(UUID.randomUUID().toString())
+                .build();
+        MDC.clear();
+        relationalDao.save(relationalKey, entityOne);
+        InterceptorTestUtil.validateThreadLocal(RelationalDao.class, RelationalEntity.class);
     }
 }

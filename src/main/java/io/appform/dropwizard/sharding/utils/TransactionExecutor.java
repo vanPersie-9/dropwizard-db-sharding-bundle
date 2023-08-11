@@ -18,20 +18,16 @@
 package io.appform.dropwizard.sharding.utils;
 
 import io.appform.dropwizard.sharding.ShardInfoProvider;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerContext;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerExecutor;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
+import io.appform.dropwizard.sharding.interceptors.TransactionExecutionContext;
+import io.appform.dropwizard.sharding.interceptors.TransactionInterceptor;
+import io.appform.dropwizard.sharding.interceptors.TransactionInterceptorExecutor;
 import lombok.val;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Utility functional class for running transactions.
@@ -41,26 +37,16 @@ public class TransactionExecutor {
     private final Class<?> daoClass;
     private final Class<?> entityClass;
     private final ShardInfoProvider shardInfoProvider;
-    private final Map<Integer, TransactionListenerExecutor> transactionListenerExecutors;
+    private final List<TransactionInterceptor> interceptors;
 
     public TransactionExecutor(final ShardInfoProvider shardInfoProvider,
                                final Class<?> daoClass,
                                final Class<?> entityClass,
-                               final List<TransactionListenerFactory> transactionListenerFactories,
-                               final int shards) {
+                               final List<TransactionInterceptor> interceptors) {
         this.daoClass = daoClass;
         this.entityClass = entityClass;
         this.shardInfoProvider = shardInfoProvider;
-        this.transactionListenerExecutors = IntStream.range(0, shards)
-                .boxed()
-                .collect(Collectors.toMap(shardId -> shardId, shardId -> {
-                    val shardName = shardInfoProvider.shardName(shardId);
-                    val listeners = transactionListenerFactories.stream().map(listenerFactory ->
-                                    listenerFactory.createListener(daoClass, entityClass, shardName))
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toList());
-                    return new TransactionListenerExecutor(listeners);
-                }));
+        this.interceptors = interceptors;
     }
 
     public <T, U> Optional<T> executeAndResolve(SessionFactory sessionFactory, Function<U, T> function, U arg,
@@ -102,55 +88,53 @@ public class TransactionExecutor {
                                boolean completeTransaction,
                                String opType,
                                int shardId) {
-        val listenerContext = TransactionListenerContext.builder()
-                .entityClass(entityClass)
+        val interceptorExecutor = new TransactionInterceptorExecutor<>(interceptors, TransactionExecutionContext.builder()
                 .daoClass(daoClass)
-                .opType(opType)
+                .entityClass(entityClass)
                 .shardName(shardInfoProvider.shardName(shardId))
-                .build();
-        val listenerExecutor = transactionListenerExecutors.getOrDefault(shardId, new TransactionListenerExecutor());
-        listenerExecutor.beforeExecute(listenerContext);
-        val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
-        if (completeTransaction) {
-            transactionHandler.beforeStart();
-        }
-        try {
-            T result = function.apply(arg);
-            V returnValue = handler.apply(result);
-            if (completeTransaction) {
-                transactionHandler.afterEnd();
-            }
-            listenerExecutor.afterExecute(listenerContext);
-            return returnValue;
-        } catch (Exception e) {
-            if (completeTransaction) {
-                transactionHandler.onError();
-            }
-            listenerExecutor.afterException(listenerContext, e);
-            throw e;
-        }
+                .opType(opType)
+                .build(),
+                () -> {
+                    val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
+                    if (completeTransaction) {
+                        transactionHandler.beforeStart();
+                    }
+                    try {
+                        T result = function.apply(arg);
+                        V returnValue = handler.apply(result);
+                        if (completeTransaction) {
+                            transactionHandler.afterEnd();
+                        }
+                        return returnValue;
+                    } catch (Exception e) {
+                        if (completeTransaction) {
+                            transactionHandler.onError();
+                        }
+                        throw e;
+                    }
+                });
+        return interceptorExecutor.proceed();
     }
 
     public <T> T execute(SessionFactory sessionFactory, Function<Session, T> handler, String opType, int shardId) {
-        val listenerContext = TransactionListenerContext.builder()
-                .entityClass(entityClass)
+        val interceptorExecutor = new TransactionInterceptorExecutor<>(interceptors, TransactionExecutionContext.builder()
                 .daoClass(daoClass)
-                .opType(opType)
+                .entityClass(entityClass)
                 .shardName(shardInfoProvider.shardName(shardId))
-                .build();
-        val listenerExecutor = transactionListenerExecutors.getOrDefault(shardId, new TransactionListenerExecutor());
-        listenerExecutor.beforeExecute(listenerContext);
-        val transactionHandler = new TransactionHandler(sessionFactory, true);
-        transactionHandler.beforeStart();
-        try {
-            T result = handler.apply(transactionHandler.getSession());
-            transactionHandler.afterEnd();
-            listenerExecutor.afterExecute(listenerContext);
-            return result;
-        } catch (Exception e) {
-            transactionHandler.onError();
-            listenerExecutor.afterException(listenerContext, e);
-            throw e;
-        }
+                .opType(opType)
+                .build(),
+                () -> {
+                    val transactionHandler = new TransactionHandler(sessionFactory, true);
+                    transactionHandler.beforeStart();
+                    try {
+                        T result = handler.apply(transactionHandler.getSession());
+                        transactionHandler.afterEnd();
+                        return result;
+                    } catch (Exception e) {
+                        transactionHandler.onError();
+                        throw e;
+                    }
+                });
+        return interceptorExecutor.proceed();
     }
 }

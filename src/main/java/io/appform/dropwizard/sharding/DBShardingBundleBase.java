@@ -33,7 +33,7 @@ import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.WrapperDao;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
+import io.appform.dropwizard.sharding.interceptors.TransactionInterceptor;
 import io.appform.dropwizard.sharding.sharding.BucketIdExtractor;
 import io.appform.dropwizard.sharding.sharding.InMemoryLocalShardBlacklistingStore;
 import io.appform.dropwizard.sharding.sharding.ShardBlacklistingStore;
@@ -93,7 +93,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     private HealthCheckManager healthCheckManager;
 
     @Getter
-    private final List<TransactionListenerFactory> listenerFactories = new ArrayList<>();
+    private final List<TransactionInterceptor> interceptors = new ArrayList<>();
 
     protected DBShardingBundleBase(
             String dbNamespace,
@@ -191,12 +191,12 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardedHibernateFactory getConfig(T config);
 
-    public void registerTransactionListenerFactories(final Collection<TransactionListenerFactory> factories) {
-        listenerFactories.addAll(factories);
+    public void registerTransactionInterceptors(final Collection<TransactionInterceptor> transactionInterceptors) {
+        interceptors.addAll(transactionInterceptors);
     }
 
-    public void registerTransactionListenerFactory(final TransactionListenerFactory factory) {
-        listenerFactories.add(factory);
+    public void registerTransactionInterceptor(final TransactionInterceptor transactionInterceptor) {
+        interceptors.add(transactionInterceptor);
     }
 
     protected ShardBlacklistingStore getBlacklistingStore() {
@@ -213,8 +213,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new LookupDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 this.shardingOptions,
-                shardInfoProvider,
-                listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
     public <EntityType, T extends Configuration>
@@ -223,7 +222,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new CacheableLookupDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 cacheManager, this.shardingOptions,
-                shardInfoProvider, listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
     public <EntityType, T extends Configuration>
@@ -231,7 +230,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                 BucketIdExtractor<String> bucketIdExtractor) {
         return new LookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), this.shardingOptions,
                 shardInfoProvider,
-                listenerFactories);
+                interceptors);
     }
 
     public <EntityType, T extends Configuration>
@@ -240,7 +239,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          LookupCache<EntityType> cacheManager) {
         return new CacheableLookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
                 cacheManager, this.shardingOptions, shardInfoProvider,
-                listenerFactories);
+                interceptors);
     }
 
 
@@ -248,7 +247,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz) {
         return new RelationalDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                shardInfoProvider, listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
 
@@ -259,7 +258,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 new ShardCalculator<>(this.shardManager,
                         new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 cacheManager,
-                shardInfoProvider, listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
 
@@ -267,7 +266,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz,
                                                      BucketIdExtractor<String> bucketIdExtractor) {
         return new RelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
-                shardInfoProvider, listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
     public <EntityType, T extends Configuration>
@@ -275,7 +274,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                               BucketIdExtractor<String> bucketIdExtractor,
                                                               RelationalCache<EntityType> cacheManager) {
         return new CacheableRelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), cacheManager,
-                shardInfoProvider, listenerFactories);
+                shardInfoProvider, interceptors);
     }
 
 

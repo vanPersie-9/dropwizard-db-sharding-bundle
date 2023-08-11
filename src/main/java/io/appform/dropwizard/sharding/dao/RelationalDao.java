@@ -19,7 +19,7 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
+import io.appform.dropwizard.sharding.interceptors.TransactionInterceptor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.utils.TransactionExecutor;
 import io.dropwizard.hibernate.AbstractDAO;
@@ -146,7 +146,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     private final TransactionExecutor transactionExecutor;
     private final ShardInfoProvider shardInfoProvider;
-    private final List<TransactionListenerFactory> listenerFactories;
+    private final List<TransactionInterceptor> interceptors;
 
     /**
      * Create a relational DAO.
@@ -159,14 +159,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
             List<SessionFactory> sessionFactories, Class<T> entityClass,
             ShardCalculator<String> shardCalculator,
             final ShardInfoProvider shardInfoProvider,
-            final List<TransactionListenerFactory> listenerFactories) {
+            final List<TransactionInterceptor> interceptors) {
         this.shardCalculator = shardCalculator;
         this.daos = sessionFactories.stream().map(RelationalDaoPriv::new).collect(Collectors.toList());
         this.entityClass = entityClass;
         this.shardInfoProvider = shardInfoProvider;
-        this.listenerFactories = listenerFactories;
-        this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, listenerFactories,
-                sessionFactories.size());
+        this.interceptors = interceptors;
+        this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, interceptors);
         Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, Id.class);
         Preconditions.checkArgument(fields.length != 0, "A field needs to be designated as @Id");
         Preconditions.checkArgument(fields.length == 1, "Only one field can be designated as @Id");
@@ -352,14 +351,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria),
-                entityClass, listenerFactories, shardInfoProvider);
+                entityClass, shardInfoProvider, interceptors);
     }
 
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, dao::save, entity,
-                entityClass, listenerFactories, shardInfoProvider);
+                entityClass, shardInfoProvider, interceptors);
     }
 
     <U> boolean createOrUpdate(LockedContext<U> context,

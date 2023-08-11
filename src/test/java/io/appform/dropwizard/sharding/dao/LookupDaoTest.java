@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
-import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Audit;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
@@ -48,7 +47,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class LookupDaoTest {
 
@@ -93,7 +95,7 @@ public class LookupDaoTest {
         final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         lookupDao = new LookupDao<>(sessionFactories, TestEntity.class, shardCalculator, shardingOptions,
-               shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+               shardInfoProvider, new ArrayList<>());
         phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions,
                 shardInfoProvider, new ArrayList<>());
         transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator,

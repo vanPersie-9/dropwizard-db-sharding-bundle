@@ -19,7 +19,7 @@ package io.appform.dropwizard.sharding.dao;
 
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
+import io.appform.dropwizard.sharding.interceptors.TransactionInterceptor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
@@ -38,8 +38,8 @@ public class CacheableRelationalDao<T> extends RelationalDao<T> {
                                   ShardCalculator<String> shardCalculator,
                                   RelationalCache<T> cache,
                                   ShardInfoProvider shardInfoProvider,
-                                  List<TransactionListenerFactory> listenerFactories) {
-        super(sessionFactories, entityClass, shardCalculator, shardInfoProvider, listenerFactories);
+                                  List<TransactionInterceptor> interceptors) {
+        super(sessionFactories, entityClass, shardCalculator, shardInfoProvider, interceptors);
         this.cache = cache;
     }
 
