@@ -1,4 +1,4 @@
-package io.appform.dropwizard.sharding.observers.internal;
+package io.appform.dropwizard.sharding.exceptions;
 
 import lombok.Getter;
 
