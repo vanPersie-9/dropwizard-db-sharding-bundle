@@ -94,29 +94,20 @@ public class TransactionExecutor {
                 .shardName(shardInfoProvider.shardName(shardId))
                 .opType(opType)
                 .build(),
-                () -> {
-                    val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
-                    if (completeTransaction) {
-                        transactionHandler.beforeStart();
-                    }
-                    try {
-                        T result = function.apply(arg);
-                        V returnValue = handler.apply(result);
-                        if (completeTransaction) {
-                            transactionHandler.afterEnd();
-                        }
-                        return returnValue;
-                    } catch (Exception e) {
-                        if (completeTransaction) {
-                            transactionHandler.onError();
-                        }
-                        throw e;
-                    }
-                });
+                () -> execute(sessionFactory, readOnly, session -> {
+                    T result = function.apply(arg);
+                    return handler.apply(result);
+                }, completeTransaction, opType, shardId));
         return interceptorExecutor.proceed();
     }
 
-    public <T> T execute(SessionFactory sessionFactory, Function<Session, T> handler, String opType, int shardId) {
+    public <T> T execute(
+            SessionFactory sessionFactory,
+            boolean readOnly,
+            Function<Session, T> handler,
+            boolean completeTransaction,
+            String opType,
+            int shardId) {
         val interceptorExecutor = new TransactionInterceptorExecutor<>(interceptors, TransactionExecutionContext.builder()
                 .daoClass(daoClass)
                 .entityClass(entityClass)
@@ -124,14 +115,20 @@ public class TransactionExecutor {
                 .opType(opType)
                 .build(),
                 () -> {
-                    val transactionHandler = new TransactionHandler(sessionFactory, true);
-                    transactionHandler.beforeStart();
+                    val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
+                    if (completeTransaction) {
+                        transactionHandler.beforeStart();
+                    }
                     try {
                         T result = handler.apply(transactionHandler.getSession());
-                        transactionHandler.afterEnd();
+                        if (completeTransaction) {
+                            transactionHandler.afterEnd();
+                        }
                         return result;
                     } catch (Exception e) {
-                        transactionHandler.onError();
+                        if (completeTransaction) {
+                            transactionHandler.onError();
+                        }
                         throw e;
                     }
                 });

@@ -282,7 +282,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         RelationalDaoPriv dao = daos.get(shardId);
-        return transactionExecutor.execute(dao.sessionFactory, handler, "runInSession", shardId);
+        return transactionExecutor.execute(dao.sessionFactory, true, handler, true, "runInSession", shardId);
     }
 
     private boolean update(int shardId, SessionFactory daoSessionFactory,  RelationalDaoPriv dao,

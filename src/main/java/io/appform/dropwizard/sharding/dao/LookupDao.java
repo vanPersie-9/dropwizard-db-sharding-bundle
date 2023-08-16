@@ -435,7 +435,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        return transactionExecutor.execute(dao.sessionFactory, handler, "runInSession", shardId);
+        return transactionExecutor.execute(dao.sessionFactory, true, handler, true, "runInSession", shardId);
     }
 
     public boolean delete(String id) {
