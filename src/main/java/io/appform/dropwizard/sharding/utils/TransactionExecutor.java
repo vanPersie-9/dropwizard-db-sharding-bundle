@@ -49,12 +49,6 @@ public class TransactionExecutor {
         this.interceptors = interceptors;
     }
 
-    public <T, U> Optional<T> executeAndResolve(SessionFactory sessionFactory, Function<U, T> function, U arg,
-                                                String opType,
-                                                int shardId) {
-        return executeAndResolve(sessionFactory, false, function, arg, opType, shardId);
-    }
-
     public <T, U> Optional<T> executeAndResolve(SessionFactory sessionFactory, boolean readOnly, Function<U, T> function, U arg,
                                                 String opType,
                                                 int shardId) {
@@ -88,17 +82,15 @@ public class TransactionExecutor {
                                boolean completeTransaction,
                                String opType,
                                int shardId) {
-        val interceptorExecutor = new TransactionInterceptorExecutor<>(interceptors, TransactionExecutionContext.builder()
-                .daoClass(daoClass)
-                .entityClass(entityClass)
-                .shardName(shardInfoProvider.shardName(shardId))
-                .opType(opType)
-                .build(),
-                () -> execute(sessionFactory, readOnly, session -> {
-                    T result = function.apply(arg);
-                    return handler.apply(result);
-                }, completeTransaction, opType, shardId));
-        return interceptorExecutor.proceed();
+        return execute(sessionFactory,
+                       readOnly,
+                       session -> {
+                           T result = function.apply(arg);
+                           return handler.apply(result);
+                       },
+                       completeTransaction,
+                       opType,
+                       shardId);
     }
 
     public <T> T execute(
