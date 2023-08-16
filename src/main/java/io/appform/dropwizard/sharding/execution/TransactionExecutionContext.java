@@ -1,4 +1,4 @@
-package io.appform.dropwizard.sharding.interceptors;
+package io.appform.dropwizard.sharding.execution;
 
 import lombok.Builder;
 import lombok.Value;

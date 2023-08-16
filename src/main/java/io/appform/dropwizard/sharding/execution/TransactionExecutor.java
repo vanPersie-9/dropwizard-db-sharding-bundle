@@ -15,17 +15,15 @@
  *
  */
 
-package io.appform.dropwizard.sharding.utils;
+package io.appform.dropwizard.sharding.execution;
 
 import io.appform.dropwizard.sharding.ShardInfoProvider;
-import io.appform.dropwizard.sharding.interceptors.TransactionExecutionContext;
-import io.appform.dropwizard.sharding.interceptors.TransactionInterceptor;
-import io.appform.dropwizard.sharding.interceptors.TransactionInterceptorExecutor;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import lombok.val;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -37,16 +35,16 @@ public class TransactionExecutor {
     private final Class<?> daoClass;
     private final Class<?> entityClass;
     private final ShardInfoProvider shardInfoProvider;
-    private final List<TransactionInterceptor> interceptors;
+    private final TransactionObserver observer;
 
     public TransactionExecutor(final ShardInfoProvider shardInfoProvider,
                                final Class<?> daoClass,
                                final Class<?> entityClass,
-                               final List<TransactionInterceptor> interceptors) {
+                               final TransactionObserver observer) {
         this.daoClass = daoClass;
         this.entityClass = entityClass;
         this.shardInfoProvider = shardInfoProvider;
-        this.interceptors = interceptors;
+        this.observer = observer;
     }
 
     public <T, U> Optional<T> executeAndResolve(SessionFactory sessionFactory, boolean readOnly, Function<U, T> function, U arg,
@@ -100,30 +98,29 @@ public class TransactionExecutor {
             boolean completeTransaction,
             String opType,
             int shardId) {
-        val interceptorExecutor = new TransactionInterceptorExecutor<>(interceptors, TransactionExecutionContext.builder()
+        val context = TransactionExecutionContext.builder()
                 .daoClass(daoClass)
                 .entityClass(entityClass)
                 .shardName(shardInfoProvider.shardName(shardId))
                 .opType(opType)
-                .build(),
-                () -> {
-                    val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
-                    if (completeTransaction) {
-                        transactionHandler.beforeStart();
-                    }
-                    try {
-                        T result = handler.apply(transactionHandler.getSession());
-                        if (completeTransaction) {
-                            transactionHandler.afterEnd();
-                        }
-                        return result;
-                    } catch (Exception e) {
-                        if (completeTransaction) {
-                            transactionHandler.onError();
-                        }
-                        throw e;
-                    }
-                });
-        return interceptorExecutor.proceed();
+                .build();
+        return observer.execute(context, () -> {
+            val transactionHandler = new TransactionHandler(sessionFactory, readOnly);
+            if (completeTransaction) {
+                transactionHandler.beforeStart();
+            }
+            try {
+                T result = handler.apply(transactionHandler.getSession());
+                if (completeTransaction) {
+                    transactionHandler.afterEnd();
+                }
+                return result;
+            } catch (Exception e) {
+                if (completeTransaction) {
+                    transactionHandler.onError();
+                }
+                throw e;
+            }
+        });
     }
 }

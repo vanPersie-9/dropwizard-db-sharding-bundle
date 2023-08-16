@@ -26,7 +26,8 @@ import io.appform.dropwizard.sharding.dao.LockedContext;
 import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
-import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalInterceptor;
+import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalObserver;
+import io.appform.dropwizard.sharding.observers.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
@@ -95,9 +96,9 @@ public class LockTest {
         final ShardingBundleOptions shardingOptions = new ShardingBundleOptions(true);
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         lookupDao = new LookupDao<>(sessionFactories, SomeLookupObject.class, shardCalculator, shardingOptions,
-                shardInfoProvider, Lists.newArrayList(new DaoClassLocalInterceptor()));
+                                    shardInfoProvider, new DaoClassLocalObserver(new TerminalTransactionObserver()));
         relationDao = new RelationalDao<>(sessionFactories, SomeOtherObject.class, shardCalculator,
-                shardInfoProvider, Lists.newArrayList(new DaoClassLocalInterceptor()));
+                                          shardInfoProvider, new DaoClassLocalObserver(new TerminalTransactionObserver()));
     }
 
     @Test

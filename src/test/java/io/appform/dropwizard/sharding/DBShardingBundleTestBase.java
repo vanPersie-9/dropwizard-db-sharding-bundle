@@ -24,6 +24,8 @@ import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.WrapperDao;
+import io.appform.dropwizard.sharding.dao.interceptors.TimerObserver;
+import io.appform.dropwizard.sharding.dao.listeners.LoggingListener;
 import io.appform.dropwizard.sharding.dao.testdata.OrderDao;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Order;
 import io.appform.dropwizard.sharding.dao.testdata.entities.OrderItem;
@@ -107,7 +109,8 @@ public abstract class DBShardingBundleTestBase {
         bundle.initBundles(bootstrap);
         bundle.runBundles(testConfig, environment);
         bundle.run(testConfig, environment);
-
+        bundle.registerObserver(new TimerObserver());
+        bundle.registerListener(new LoggingListener());
         WrapperDao<Order, OrderDao> dao = bundle.createWrapperDao(OrderDao.class);
 
         RelationalDao<Order> rDao = bundle.createRelatedObjectDao(Order.class);
