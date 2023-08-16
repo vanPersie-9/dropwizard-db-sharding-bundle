@@ -381,7 +381,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             }
             if(observer instanceof ListenerTriggeringObserver) {
                 log.debug("  Listeners:");
-                ((ListenerTriggeringObserver)observer).getListener().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName() ));
+                ((ListenerTriggeringObserver)observer).getListeners().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName()));
             }
         });
     }

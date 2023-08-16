@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 @Slf4j
 @Getter
 public class ListenerTriggeringObserver extends TransactionObserver {
-    private final List<TransactionListener> listener = new ArrayList<>();
+    private final List<TransactionListener> listeners = new ArrayList<>();
 
     public ListenerTriggeringObserver() {
         this(null);
@@ -31,12 +31,12 @@ public class ListenerTriggeringObserver extends TransactionObserver {
 
 
     public TransactionObserver addListener(final TransactionListener listener) {
-        this.listener.add(listener);
+        this.listeners.add(listener);
         return this;
     }
 
     public TransactionObserver addListeners(final Collection<TransactionListener> listeners) {
-        listener.addAll(listeners);
+        listeners.addAll(listeners);
         return this;
     }
 
@@ -44,7 +44,7 @@ public class ListenerTriggeringObserver extends TransactionObserver {
     public <T> T execute(TransactionExecutionContext context, Supplier<T> supplier) {
         Objects.requireNonNull(context, "Context cannot be null");
         try {
-            listener.forEach(listener -> {
+            listeners.forEach(listener -> {
                 try {
                     listener.beforeExecute(context);
                 }
@@ -53,7 +53,7 @@ public class ListenerTriggeringObserver extends TransactionObserver {
                 }
             });
             val result = proceed(context, supplier);
-            listener.forEach(listener -> {
+            listeners.forEach(listener -> {
                 try {
                     listener.afterExecute(context);
                 }
@@ -65,7 +65,7 @@ public class ListenerTriggeringObserver extends TransactionObserver {
             return result;
         }
         catch (Throwable t) {
-            listener.forEach(listener -> {
+            listeners.forEach(listener -> {
                 try {
                     listener.afterException(context, t);
                 }
