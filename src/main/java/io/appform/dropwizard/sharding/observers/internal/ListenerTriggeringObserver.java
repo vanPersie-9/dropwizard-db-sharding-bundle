@@ -44,33 +44,33 @@ public class ListenerTriggeringObserver extends TransactionObserver {
     public <T> T execute(TransactionExecutionContext context, Supplier<T> supplier) {
         Objects.requireNonNull(context, "Context cannot be null");
         try {
-            listener.forEach(interceptor -> {
+            listener.forEach(listener -> {
                 try {
-                    interceptor.beforeExecute(context);
+                    listener.beforeExecute(context);
                 }
                 catch (Throwable t) {
-                    log.info("Error running listener beforeExecute: " + interceptor.getClass(), t);
+                    log.info("Error running listener beforeExecute: " + listener.getClass(), t);
                 }
             });
             val result = proceed(context, supplier);
-            listener.forEach(interceptor -> {
+            listener.forEach(listener -> {
                 try {
-                    interceptor.afterExecute(context);
+                    listener.afterExecute(context);
                 }
                 catch (Throwable t) {
-                    log.info("Error running listener afterExecute: " + interceptor.getClass(), t);
+                    log.info("Error running listener afterExecute: " + listener.getClass(), t);
                 }
 
             });
             return result;
         }
         catch (Throwable t) {
-            listener.forEach(interceptor -> {
+            listener.forEach(listener -> {
                 try {
-                    interceptor.afterException(context, t);
+                    listener.afterException(context, t);
                 }
                 catch (Throwable th) {
-                    log.info("Error running listener afterException: " + interceptor.getClass(), th);
+                    log.info("Error running listener afterException: " + listener.getClass(), th);
                 }
 
             });
