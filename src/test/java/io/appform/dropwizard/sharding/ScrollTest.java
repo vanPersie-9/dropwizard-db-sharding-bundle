@@ -77,7 +77,7 @@ public class ScrollTest {
             addValuesToSet(entities, result);
             pointer = result.getPointer();
             log.info("Received {} entities", result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
-        } while (result.getResult().size() != 0);
+        } while (!result.getResult().isEmpty());
         assertTrue( "There are " + Sets.difference(ids, entities) + " ids missing in scroll", entities.containsAll(ids));
     }
 
