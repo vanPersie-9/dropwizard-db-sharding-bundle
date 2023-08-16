@@ -28,11 +28,13 @@ import io.appform.dropwizard.sharding.caching.RelationalCache;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.*;
+import io.appform.dropwizard.sharding.filters.TransactionFilter;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
-import io.appform.dropwizard.sharding.observers.TerminalTransactionObserver;
-import io.appform.dropwizard.sharding.observers.ListenerTriggeringObserver;
-import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.observers.internal.FilteringObserver;
+import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
+import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.sharding.BucketIdExtractor;
 import io.appform.dropwizard.sharding.sharding.InMemoryLocalShardBlacklistingStore;
 import io.appform.dropwizard.sharding.sharding.ShardBlacklistingStore;
@@ -50,6 +52,7 @@ import io.dropwizard.setup.Environment;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
+import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.SessionFactory;
 import org.reflections.Reflections;
@@ -85,9 +88,12 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private HealthCheckManager healthCheckManager;
 
-    private final ListenerTriggeringObserver listeners = new ListenerTriggeringObserver(new TerminalTransactionObserver());
+    private final List<TransactionListener> listeners = new ArrayList<>();
+    private final List<TransactionFilter> filters = new ArrayList<>();
 
-    private TransactionObserver rootObserver = listeners;
+    private final List<TransactionObserver> observers = new ArrayList<>();
+
+    private TransactionObserver rootObserver;
 
     protected DBShardingBundleBase(
             String dbNamespace,
@@ -141,8 +147,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                     public PooledDataSourceFactory getDataSourceFactory(T t) {
                         return getConfig(t).getShards().get(shard);
                     }
-                })
-                                             );
+                }));
     }
 
     @Override
@@ -157,22 +162,32 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
+
+        setupObservers();
     }
 
     public void registerObserver(final TransactionObserver observer) {
         if (null == observer) {
             return;
         }
-        val old = this.rootObserver;
-        observer.setNext(old);
-        this.rootObserver = observer;
+        this.observers.add(observer);
+        log.info("Registered observer: " + observer.getClass().getSimpleName());
     }
 
     public void registerListener(final TransactionListener listener) {
         if (null == listener) {
             return;
         }
-        this.listeners.addListener(listener);
+        this.listeners.add(listener);
+        log.info("Registered listener: " + listener.getClass().getSimpleName());
+    }
+
+    public void registerFilter(final TransactionFilter filter) {
+        if (null == filter) {
+            return;
+        }
+        this.filters.add(filter);
+        log.info("Registered filter: " + filter.getClass().getSimpleName());
     }
 
     @Override
@@ -343,4 +358,32 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                 new ShardCalculator<>(this.shardManager,
                                                       new ConsistentHashBucketIdExtractor<>(this.shardManager)));
     }
+
+    private void setupObservers() {
+        //Observer chain starts with filters and ends with listener invocations
+        //Terminal observer calls the actual method
+        rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
+        for (var observer : observers) {
+            if (null == observer) {
+                return;
+            }
+            this.rootObserver = observer.setNext(rootObserver);
+        }
+        rootObserver = new FilteringObserver(rootObserver).addFilters(filters);
+
+        //Print the observer chain
+        log.debug("Observer chain");
+        rootObserver.visit(observer -> {
+            log.debug(" Observer: {}", observer.getClass().getSimpleName());
+            if(observer instanceof FilteringObserver) {
+                log.debug("  Filters:");
+                ((FilteringObserver)observer).getFilters().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName() ));
+            }
+            if(observer instanceof ListenerTriggeringObserver) {
+                log.debug("  Listeners:");
+                ((ListenerTriggeringObserver)observer).getListener().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName() ));
+            }
+        });
+    }
+
 }

@@ -24,7 +24,7 @@ import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalObserver;
 import io.appform.dropwizard.sharding.dao.interceptors.EntityClassThreadLocalObserver;
 import io.appform.dropwizard.sharding.dao.interceptors.InterceptorTestUtil;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
-import io.appform.dropwizard.sharding.observers.TerminalTransactionObserver;
+import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;

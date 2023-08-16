@@ -27,7 +27,7 @@ import io.appform.dropwizard.sharding.dao.LookupDao;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
 import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalObserver;
-import io.appform.dropwizard.sharding.observers.TerminalTransactionObserver;
+import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;

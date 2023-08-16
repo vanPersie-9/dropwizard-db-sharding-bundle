@@ -1,6 +1,7 @@
-package io.appform.dropwizard.sharding.observers;
+package io.appform.dropwizard.sharding.observers.internal;
 
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
 
 import java.util.function.Supplier;
 

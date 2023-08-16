@@ -1,7 +1,9 @@
-package io.appform.dropwizard.sharding.observers;
+package io.appform.dropwizard.sharding.observers.internal;
 
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 
@@ -15,6 +17,7 @@ import java.util.function.Supplier;
  *
  */
 @Slf4j
+@Getter
 public class ListenerTriggeringObserver extends TransactionObserver {
     private final List<TransactionListener> listener = new ArrayList<>();
 
