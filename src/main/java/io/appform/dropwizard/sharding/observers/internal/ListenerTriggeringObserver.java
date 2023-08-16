@@ -36,7 +36,7 @@ public class ListenerTriggeringObserver extends TransactionObserver {
     }
 
     public TransactionObserver addListeners(final Collection<TransactionListener> listeners) {
-        listeners.addAll(listeners);
+        this.listeners.addAll(listeners);
         return this;
     }
 
