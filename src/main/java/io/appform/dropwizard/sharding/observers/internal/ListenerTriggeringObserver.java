@@ -18,7 +18,7 @@ import java.util.function.Supplier;
  */
 @Slf4j
 @Getter
-public class ListenerTriggeringObserver extends TransactionObserver {
+public final class ListenerTriggeringObserver extends TransactionObserver {
     private final List<TransactionListener> listeners = new ArrayList<>();
 
     public ListenerTriggeringObserver() {
@@ -41,7 +41,7 @@ public class ListenerTriggeringObserver extends TransactionObserver {
     }
 
     @Override
-    public <T> T execute(TransactionExecutionContext context, Supplier<T> supplier) {
+    public final <T> T execute(TransactionExecutionContext context, Supplier<T> supplier) {
         Objects.requireNonNull(context, "Context cannot be null");
         try {
             listeners.forEach(listener -> {

@@ -21,7 +21,7 @@ public abstract class TransactionObserver {
 
     public abstract <T> T execute(final TransactionExecutionContext context, Supplier<T> supplier);
 
-    public TransactionObserver setNext(final TransactionObserver next) {
+    public final TransactionObserver setNext(final TransactionObserver next) {
         this.next = next;
         return this;
     }

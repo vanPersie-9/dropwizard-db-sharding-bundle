@@ -58,7 +58,12 @@ import org.hibernate.SessionFactory;
 import org.reflections.Reflections;
 
 import javax.persistence.Entity;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -166,7 +171,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         setupObservers();
     }
 
-    public void registerObserver(final TransactionObserver observer) {
+    public final void registerObserver(final TransactionObserver observer) {
         if (null == observer) {
             return;
         }
@@ -174,7 +179,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         log.info("Registered observer: " + observer.getClass().getSimpleName());
     }
 
-    public void registerListener(final TransactionListener listener) {
+    public final void registerListener(final TransactionListener listener) {
         if (null == listener) {
             return;
         }
@@ -182,7 +187,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         log.info("Registered listener: " + listener.getClass().getSimpleName());
     }
 
-    public void registerFilter(final TransactionFilter filter) {
+    public final void registerFilter(final TransactionFilter filter) {
         if (null == filter) {
             return;
         }

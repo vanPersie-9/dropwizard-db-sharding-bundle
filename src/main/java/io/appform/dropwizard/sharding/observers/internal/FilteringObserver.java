@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  */
 @Getter
 @Slf4j
-public class FilteringObserver extends TransactionObserver {
+public final class FilteringObserver extends TransactionObserver {
 
     private final List<TransactionFilter> filters = new ArrayList<>();
 

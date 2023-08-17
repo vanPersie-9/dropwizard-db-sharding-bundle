@@ -8,7 +8,7 @@ import java.util.function.Supplier;
 /**
  *
  */
-public class TerminalTransactionObserver extends TransactionObserver {
+public final class TerminalTransactionObserver extends TransactionObserver {
     public TerminalTransactionObserver() {
         super(null);
     }
