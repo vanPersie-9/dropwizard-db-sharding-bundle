@@ -36,7 +36,7 @@ import io.appform.dropwizard.sharding.filters.TransactionFilter;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
 import io.appform.dropwizard.sharding.metrics.TransactionMetricManager;
-import io.appform.dropwizard.sharding.metrics.TransactionTimerObserver;
+import io.appform.dropwizard.sharding.metrics.TransactionMetricObserver;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.observers.internal.FilteringObserver;
 import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
@@ -374,7 +374,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     }
 
     private void setupObservers() {
-        registerObserver(new TransactionTimerObserver(metricManager));
+        registerObserver(new TransactionMetricObserver(metricManager));
 
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method

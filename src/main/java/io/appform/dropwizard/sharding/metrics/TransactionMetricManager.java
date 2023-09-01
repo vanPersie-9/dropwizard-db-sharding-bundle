@@ -1,10 +1,12 @@
 package io.appform.dropwizard.sharding.metrics;
 
-import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
+import com.google.common.base.Strings;
 import io.appform.dropwizard.sharding.config.MetricConfig;
+import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
+import lombok.val;
 
 import java.util.concurrent.TimeUnit;
 
@@ -23,11 +25,11 @@ public class TransactionMetricManager {
     }
 
     public boolean isMetricApplicable(final Class<?> entityClass) {
-        if(metricConfig == null) {
+        if (metricConfig == null) {
             return false;
         }
 
-        if(metricConfig.isEnabledForAll()) {
+        if (metricConfig.isEnabledForAll()) {
             return true;
         }
 
@@ -35,17 +37,48 @@ public class TransactionMetricManager {
                 && metricConfig.getEnabledForEntities().contains(entityClass.getCanonicalName());
     }
 
-    public Meter getMeter(final String name) {
-        return metricRegistry.meter(name);
+    public String getDaoMetricPrefix(final Class<?> daoClass) {
+        return METRIC_PREFIX + DELIMITER
+                + "operation"
+                + DELIMITER
+                + normalizeString(daoClass.getCanonicalName());
     }
 
-    public Timer getTimer(final String metric) {
-        return metricRegistry.timer(metric, () ->
-                new Timer(new SlidingTimeWindowArrayReservoir(60, TimeUnit.SECONDS)));
+    public MetricData getDaoOpMetricData(final String metricPrefix,
+                                         final TransactionExecutionContext context) {
+        val metricBuilder = new StringBuilder(metricPrefix)
+                .append(DELIMITER)
+                .append(normalizeString(context.getOpType()));
+        if (!Strings.isNullOrEmpty(context.getLockedContextMode())) {
+            metricBuilder.append(DELIMITER).append(context.getLockedContextMode());
+        }
+        return getMetricData(metricBuilder.toString());
     }
 
-    public String getMetricPrefix(final String metric) {
-        return METRIC_PREFIX + DELIMITER + normalizeString(metric) + DELIMITER;
+    public MetricData getShardMetricData(final String shardName) {
+        val metricPrefix = METRIC_PREFIX + DELIMITER
+                + "shard"
+                + DELIMITER
+                + normalizeString(shardName);
+        return getMetricData(metricPrefix);
+    }
+
+    public MetricData getEntityMetricData(final Class<?> entityClass) {
+        val metricPrefix = METRIC_PREFIX + DELIMITER
+                + "entity"
+                + DELIMITER
+                + normalizeString(entityClass.getCanonicalName());
+        return getMetricData(metricPrefix);
+    }
+
+    private MetricData getMetricData(final String metricPrefix) {
+        return MetricData.builder()
+                .timer(metricRegistry.timer(MetricRegistry.name(metricPrefix, "latency"),
+                        () -> new Timer(new SlidingTimeWindowArrayReservoir(60, TimeUnit.SECONDS))))
+                .success(metricRegistry.meter(MetricRegistry.name(metricPrefix, "success")))
+                .failed(metricRegistry.meter(MetricRegistry.name(metricPrefix, "failed")))
+                .total(metricRegistry.meter(MetricRegistry.name(metricPrefix, "total")))
+                .build();
     }
 
     private String normalizeString(final String name) {

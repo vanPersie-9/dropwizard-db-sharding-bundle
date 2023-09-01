@@ -1,24 +1,35 @@
 package io.appform.dropwizard.sharding.metrics;
 
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import lombok.Getter;
 import lombok.val;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class TransactionTimerObserver extends TransactionObserver {
+public class TransactionMetricObserver extends TransactionObserver {
     private final TransactionMetricManager metricManager;
-    private final Map<Class<?>, MetricData> entityTimers = new ConcurrentHashMap<>();
-    private final Map<String, MetricData> shardTimers = new ConcurrentHashMap<>();
 
-    public TransactionTimerObserver(final TransactionMetricManager metricManager) {
+    @Getter
+    private final Map<Class<?>, MetricData> entityMetricCache = new ConcurrentHashMap<>();
+
+    @Getter
+    private final Map<String, MetricData> shardMetricCache = new ConcurrentHashMap<>();
+
+    @Getter
+    private final Map<String, Map<String, MetricData>> daoToOpTypeMetricCache = new ConcurrentHashMap<>();
+
+    @Getter
+    private final Map<Class<?>, String> daoMetricPrefixCache = new ConcurrentHashMap<>();
+
+    public TransactionMetricObserver(final TransactionMetricManager metricManager) {
         super(null);
         this.metricManager = metricManager;
     }
@@ -46,20 +57,23 @@ public class TransactionTimerObserver extends TransactionObserver {
     }
 
     private List<MetricData> getMetrics(final TransactionExecutionContext context) {
-        val entityMetricData = entityTimers.computeIfAbsent(context.getEntityClass(),
-                key -> getMetricData(context.getEntityClass().getCanonicalName()));
-        val shardMetricData = shardTimers.computeIfAbsent(context.getShardName(),
-                key -> getMetricData(context.getShardName()));
-        return Lists.newArrayList(entityMetricData, shardMetricData);
+        val entityMetricData = entityMetricCache.computeIfAbsent(context.getEntityClass(),
+                key -> metricManager.getEntityMetricData(context.getEntityClass()));
+        val shardMetricData = shardMetricCache.computeIfAbsent(context.getShardName(),
+                key -> metricManager.getShardMetricData(context.getShardName()));
+        val daoMetricData = getDaoMetricData(context);
+        return Lists.newArrayList(entityMetricData, shardMetricData, daoMetricData);
     }
 
-    private MetricData getMetricData(final String metric) {
-        val metricPrefix = metricManager.getMetricPrefix(metric);
-        return MetricData.builder()
-                .timer(metricManager.getTimer(MetricRegistry.name(metricPrefix, "latency")))
-                .success(metricManager.getMeter(MetricRegistry.name(metricPrefix, "success")))
-                .failed(metricManager.getMeter(MetricRegistry.name(metricPrefix, "failed")))
-                .total(metricManager.getMeter(MetricRegistry.name(metricPrefix, "total")))
-                .build();
+    private MetricData getDaoMetricData(final TransactionExecutionContext context) {
+        val daoClass = context.getDaoClass();
+        val daoMetricPrefix = daoMetricPrefixCache.computeIfAbsent(daoClass, key -> {
+            val prefix = metricManager.getDaoMetricPrefix(daoClass);
+            daoToOpTypeMetricCache.put(prefix, new HashMap<>());
+            return prefix;
+        });
+        val opType = context.getOpType();
+        return daoToOpTypeMetricCache.get(daoMetricPrefix).computeIfAbsent(opType,
+                key -> metricManager.getDaoOpMetricData(daoMetricPrefix, context));
     }
 }
