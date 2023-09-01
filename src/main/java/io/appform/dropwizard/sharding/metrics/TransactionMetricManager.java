@@ -8,7 +8,6 @@ import io.appform.dropwizard.sharding.config.MetricConfig;
 
 import java.util.concurrent.TimeUnit;
 
-
 public class TransactionMetricManager {
 
     private MetricConfig metricConfig;
