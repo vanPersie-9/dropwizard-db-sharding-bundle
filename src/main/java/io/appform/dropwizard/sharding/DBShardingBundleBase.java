@@ -27,10 +27,17 @@ import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
-import io.appform.dropwizard.sharding.dao.*;
+import io.appform.dropwizard.sharding.dao.CacheableLookupDao;
+import io.appform.dropwizard.sharding.dao.CacheableRelationalDao;
+import io.appform.dropwizard.sharding.dao.LookupDao;
+import io.appform.dropwizard.sharding.dao.RelationalDao;
+import io.appform.dropwizard.sharding.dao.WrapperDao;
 import io.appform.dropwizard.sharding.filters.TransactionFilter;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.metrics.TransactionCounterListener;
+import io.appform.dropwizard.sharding.metrics.TransactionMetricManager;
+import io.appform.dropwizard.sharding.metrics.TransactionTimerObserver;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.observers.internal.FilteringObserver;
 import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
@@ -100,6 +107,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private TransactionObserver rootObserver;
 
+    private TransactionMetricManager metricManager;
+
     protected DBShardingBundleBase(
             String dbNamespace,
             Class<?> entity,
@@ -141,6 +150,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          shardInfoProvider,
                                                          blacklistingStore,
                                                          shardManager);
+        this.metricManager = new TransactionMetricManager();
         IntStream.range(0, numShards).forEach(
                 shard -> shardBundles.add(new HibernateBundle<T>(inEntities, new SessionFactoryFactory()) {
                     @Override
@@ -167,7 +177,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
-
+        metricManager.initialize(getConfig(configuration).getMetricConfig(), environment.metrics());
         setupObservers();
     }
 
@@ -365,6 +375,9 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     }
 
     private void setupObservers() {
+        registerListener(new TransactionCounterListener(metricManager));
+        registerObserver(new TransactionTimerObserver(metricManager));
+
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
