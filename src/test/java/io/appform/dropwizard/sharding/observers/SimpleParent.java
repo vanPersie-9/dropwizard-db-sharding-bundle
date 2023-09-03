@@ -1,47 +1,38 @@
-/*
- * Copyright 2016 Santanu Sinha <santanu.sinha@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+package io.appform.dropwizard.sharding.observers;
 
-package io.appform.dropwizard.sharding.dao.testdata.entities;
-
+import io.appform.dropwizard.sharding.sharding.LookupKey;
 import lombok.*;
+import lombok.experimental.FieldNameConstants;
 import org.hibernate.proxy.HibernateProxy;
 
 import javax.persistence.*;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Objects;
 
+/**
+ *
+ */
 @Entity
-@Table(name = "order_items")
+@Table(name = "simple_parents")
 @Getter
 @Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @ToString
-@Builder
-public class OrderItem {
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldNameConstants
+public class SimpleParent {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
-    @Column(name = "name")
+    @Column
+    @LookupKey
     private String name;
 
-    @ManyToOne
-    @JoinColumn(name = "order_id")
-    private Order order;
+    @Transient
+    private Collection<SimpleChild> children = new ArrayList<>();
 
     @Override
     public final boolean equals(Object o) {
@@ -60,8 +51,8 @@ public class OrderItem {
         if (thisEffectiveClass != oEffectiveClass) {
             return false;
         }
-        OrderItem orderItem = (OrderItem) o;
-        return Objects.equals(getId(), orderItem.getId());
+        SimpleParent that = (SimpleParent) o;
+        return Objects.equals(getId(), that.getId());
     }
 
     @Override

@@ -27,13 +27,14 @@ import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
-import io.appform.dropwizard.sharding.dao.CacheableLookupDao;
-import io.appform.dropwizard.sharding.dao.CacheableRelationalDao;
-import io.appform.dropwizard.sharding.dao.LookupDao;
-import io.appform.dropwizard.sharding.dao.RelationalDao;
-import io.appform.dropwizard.sharding.dao.WrapperDao;
+import io.appform.dropwizard.sharding.dao.*;
+import io.appform.dropwizard.sharding.filters.TransactionFilter;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
-import io.appform.dropwizard.sharding.listeners.TransactionListenerFactory;
+import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.observers.internal.FilteringObserver;
+import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
+import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.sharding.BucketIdExtractor;
 import io.appform.dropwizard.sharding.sharding.InMemoryLocalShardBlacklistingStore;
 import io.appform.dropwizard.sharding.sharding.ShardBlacklistingStore;
@@ -51,6 +52,7 @@ import io.dropwizard.setup.Environment;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
+import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.SessionFactory;
 import org.reflections.Reflections;
@@ -58,7 +60,6 @@ import org.reflections.Reflections;
 import javax.persistence.Entity;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -92,8 +93,12 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private HealthCheckManager healthCheckManager;
 
-    @Getter
-    private final List<TransactionListenerFactory> listenerFactories = new ArrayList<>();
+    private final List<TransactionListener> listeners = new ArrayList<>();
+    private final List<TransactionFilter> filters = new ArrayList<>();
+
+    private final List<TransactionObserver> observers = new ArrayList<>();
+
+    private TransactionObserver rootObserver;
 
     protected DBShardingBundleBase(
             String dbNamespace,
@@ -107,7 +112,9 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     protected DBShardingBundleBase(String dbNamespace, List<String> classPathPrefixList) {
         this.dbNamespace = dbNamespace;
         Set<Class<?>> entities = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
-        Preconditions.checkArgument(!entities.isEmpty(), String.format("No entity class found at %s", String.join(",", classPathPrefixList)));
+        Preconditions.checkArgument(!entities.isEmpty(),
+                                    String.format("No entity class found at %s",
+                                                  String.join(",", classPathPrefixList)));
         val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
         init(inEntities);
     }
@@ -130,7 +137,10 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         val blacklistingStore = getBlacklistingStore();
         this.shardManager = createShardManager(numShards, blacklistingStore);
         this.shardInfoProvider = new ShardInfoProvider(dbNamespace);
-        this.healthCheckManager = new HealthCheckManager(dbNamespace, shardInfoProvider, blacklistingStore, shardManager);
+        this.healthCheckManager = new HealthCheckManager(dbNamespace,
+                                                         shardInfoProvider,
+                                                         blacklistingStore,
+                                                         shardManager);
         IntStream.range(0, numShards).forEach(
                 shard -> shardBundles.add(new HibernateBundle<T>(inEntities, new SessionFactoryFactory()) {
                     @Override
@@ -142,23 +152,48 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                     public PooledDataSourceFactory getDataSourceFactory(T t) {
                         return getConfig(t).getShards().get(shard);
                     }
-                })
-        );
+                }));
     }
 
     @Override
     public void run(T configuration, Environment environment) {
         val shardConfigurationListSize = getConfig(configuration).getShards().size();
         if (numShards != shardConfigurationListSize) {
-            throw new RuntimeException("Shard count provided through environment does not match the size of the shard configuration list");
+            throw new RuntimeException(
+                    "Shard count provided through environment does not match the size of the shard configuration list");
         }
         sessionFactories = shardBundles.stream().map(HibernateBundle::getSessionFactory).collect(Collectors.toList());
         this.shardingOptions = getShardingOptions(configuration);
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
+
+        setupObservers();
     }
 
+    public final void registerObserver(final TransactionObserver observer) {
+        if (null == observer) {
+            return;
+        }
+        this.observers.add(observer);
+        log.info("Registered observer: " + observer.getClass().getSimpleName());
+    }
+
+    public final void registerListener(final TransactionListener listener) {
+        if (null == listener) {
+            return;
+        }
+        this.listeners.add(listener);
+        log.info("Registered listener: " + listener.getClass().getSimpleName());
+    }
+
+    public final void registerFilter(final TransactionFilter filter) {
+        if (null == filter) {
+            return;
+        }
+        this.filters.add(filter);
+        log.info("Registered filter: " + filter.getClass().getSimpleName());
+    }
 
     @Override
     @SuppressWarnings("unchecked")
@@ -172,7 +207,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         shardBundles.forEach(hibernateBundle -> {
             try {
                 hibernateBundle.run(configuration, environment);
-            } catch (Exception e) {
+            }
+            catch (Exception e) {
                 log.error("Error initializing db sharding bundle", e);
                 throw new RuntimeException(e);
             }
@@ -191,14 +227,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected abstract ShardedHibernateFactory getConfig(T config);
 
-    public void registerTransactionListenerFactories(final Collection<TransactionListenerFactory> factories) {
-        listenerFactories.addAll(factories);
-    }
-
-    public void registerTransactionListenerFactory(final TransactionListenerFactory factory) {
-        listenerFactories.add(factory);
-    }
-
     protected ShardBlacklistingStore getBlacklistingStore() {
         return new InMemoryLocalShardBlacklistingStore();
     }
@@ -211,93 +239,156 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     public <EntityType, T extends Configuration>
     LookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz) {
         return new LookupDao<>(this.sessionFactories, clazz,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                this.shardingOptions,
-                shardInfoProvider,
-                listenerFactories);
+                               new ShardCalculator<>(this.shardManager,
+                                                     new ConsistentHashBucketIdExtractor<>(this.shardManager)),
+                               this.shardingOptions,
+                               shardInfoProvider,
+                               rootObserver);
     }
 
     public <EntityType, T extends Configuration>
-    CacheableLookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz,
-                                                         LookupCache<EntityType> cacheManager) {
-        return new CacheableLookupDao<>(this.sessionFactories, clazz,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                cacheManager, this.shardingOptions,
-                shardInfoProvider, listenerFactories);
+    CacheableLookupDao<EntityType> createParentObjectDao(
+            Class<EntityType> clazz,
+            LookupCache<EntityType> cacheManager) {
+        return new CacheableLookupDao<>(this.sessionFactories,
+                                        clazz,
+                                        new ShardCalculator<>(this.shardManager,
+                                                              new ConsistentHashBucketIdExtractor<>(this.shardManager)),
+                                        cacheManager,
+                                        this.shardingOptions,
+                                        shardInfoProvider,
+                                        rootObserver);
     }
 
     public <EntityType, T extends Configuration>
-    LookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz,
-                                                BucketIdExtractor<String> bucketIdExtractor) {
-        return new LookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), this.shardingOptions,
-                shardInfoProvider,
-                listenerFactories);
+    LookupDao<EntityType> createParentObjectDao(
+            Class<EntityType> clazz,
+            BucketIdExtractor<String> bucketIdExtractor) {
+        return new LookupDao<>(this.sessionFactories,
+                               clazz,
+                               new ShardCalculator<>(this.shardManager, bucketIdExtractor),
+                               this.shardingOptions,
+                               shardInfoProvider,
+                               rootObserver);
     }
 
     public <EntityType, T extends Configuration>
-    CacheableLookupDao<EntityType> createParentObjectDao(Class<EntityType> clazz,
-                                                         BucketIdExtractor<String> bucketIdExtractor,
-                                                         LookupCache<EntityType> cacheManager) {
-        return new CacheableLookupDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
-                cacheManager, this.shardingOptions, shardInfoProvider,
-                listenerFactories);
+    CacheableLookupDao<EntityType> createParentObjectDao(
+            Class<EntityType> clazz,
+            BucketIdExtractor<String> bucketIdExtractor,
+            LookupCache<EntityType> cacheManager) {
+        return new CacheableLookupDao<>(this.sessionFactories,
+                                        clazz,
+                                        new ShardCalculator<>(this.shardManager, bucketIdExtractor),
+                                        cacheManager,
+                                        this.shardingOptions,
+                                        shardInfoProvider,
+                                        rootObserver);
     }
 
 
     public <EntityType, T extends Configuration>
     RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz) {
         return new RelationalDao<>(this.sessionFactories, clazz,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                shardInfoProvider, listenerFactories);
+                                   new ShardCalculator<>(this.shardManager,
+                                                         new ConsistentHashBucketIdExtractor<>(this.shardManager)),
+                                   shardInfoProvider,
+                                   rootObserver);
     }
 
 
     public <EntityType, T extends Configuration>
-    CacheableRelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz, RelationalCache<EntityType> cacheManager) {
+    CacheableRelationalDao<EntityType> createRelatedObjectDao(
+            Class<EntityType> clazz,
+            RelationalCache<EntityType> cacheManager) {
         return new CacheableRelationalDao<>(this.sessionFactories,
-                clazz,
-                new ShardCalculator<>(this.shardManager,
-                        new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                cacheManager,
-                shardInfoProvider, listenerFactories);
+                                            clazz,
+                                            new ShardCalculator<>(this.shardManager,
+                                                                  new ConsistentHashBucketIdExtractor<>(this.shardManager)),
+                                            cacheManager,
+                                            shardInfoProvider,
+                                            rootObserver);
     }
 
 
     public <EntityType, T extends Configuration>
-    RelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz,
-                                                     BucketIdExtractor<String> bucketIdExtractor) {
-        return new RelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor),
-                shardInfoProvider, listenerFactories);
+    RelationalDao<EntityType> createRelatedObjectDao(
+            Class<EntityType> clazz,
+            BucketIdExtractor<String> bucketIdExtractor) {
+        return new RelationalDao<>(this.sessionFactories,
+                                   clazz,
+                                   new ShardCalculator<>(this.shardManager, bucketIdExtractor),
+                                   shardInfoProvider,
+                                   rootObserver);
     }
 
     public <EntityType, T extends Configuration>
-    CacheableRelationalDao<EntityType> createRelatedObjectDao(Class<EntityType> clazz,
-                                                              BucketIdExtractor<String> bucketIdExtractor,
-                                                              RelationalCache<EntityType> cacheManager) {
-        return new CacheableRelationalDao<>(this.sessionFactories, clazz, new ShardCalculator<>(this.shardManager, bucketIdExtractor), cacheManager,
-                shardInfoProvider, listenerFactories);
+    CacheableRelationalDao<EntityType> createRelatedObjectDao(
+            Class<EntityType> clazz,
+            BucketIdExtractor<String> bucketIdExtractor,
+            RelationalCache<EntityType> cacheManager) {
+        return new CacheableRelationalDao<>(this.sessionFactories,
+                                            clazz,
+                                            new ShardCalculator<>(this.shardManager, bucketIdExtractor),
+                                            cacheManager,
+                                            shardInfoProvider,
+                                            rootObserver);
     }
 
 
     public <EntityType, DaoType extends AbstractDAO<EntityType>, T extends Configuration>
     WrapperDao<EntityType, DaoType> createWrapperDao(Class<DaoType> daoTypeClass) {
         return new WrapperDao<>(this.sessionFactories,
-                daoTypeClass,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)));
+                                daoTypeClass,
+                                new ShardCalculator<>(this.shardManager,
+                                                      new ConsistentHashBucketIdExtractor<>(this.shardManager)));
     }
 
     public <EntityType, DaoType extends AbstractDAO<EntityType>, T extends Configuration>
-    WrapperDao<EntityType, DaoType> createWrapperDao(Class<DaoType> daoTypeClass,
-                                                     BucketIdExtractor<String> bucketIdExtractor) {
-        return new WrapperDao<>(this.sessionFactories, daoTypeClass, new ShardCalculator<>(this.shardManager, bucketIdExtractor));
+    WrapperDao<EntityType, DaoType> createWrapperDao(
+            Class<DaoType> daoTypeClass,
+            BucketIdExtractor<String> bucketIdExtractor) {
+        return new WrapperDao<>(this.sessionFactories,
+                                daoTypeClass,
+                                new ShardCalculator<>(this.shardManager, bucketIdExtractor));
     }
 
     public <EntityType, DaoType extends AbstractDAO<EntityType>, T extends Configuration>
-    WrapperDao<EntityType, DaoType> createWrapperDao(Class<DaoType> daoTypeClass,
-                                                     Class[] extraConstructorParamClasses,
-                                                     Class[] extraConstructorParamObjects) {
+    WrapperDao<EntityType, DaoType> createWrapperDao(
+            Class<DaoType> daoTypeClass,
+            Class[] extraConstructorParamClasses,
+            Class[] extraConstructorParamObjects) {
         return new WrapperDao<>(this.sessionFactories, daoTypeClass,
-                extraConstructorParamClasses, extraConstructorParamObjects,
-                new ShardCalculator<>(this.shardManager, new ConsistentHashBucketIdExtractor<>(this.shardManager)));
+                                extraConstructorParamClasses, extraConstructorParamObjects,
+                                new ShardCalculator<>(this.shardManager,
+                                                      new ConsistentHashBucketIdExtractor<>(this.shardManager)));
     }
+
+    private void setupObservers() {
+        //Observer chain starts with filters and ends with listener invocations
+        //Terminal observer calls the actual method
+        rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
+        for (var observer : observers) {
+            if (null == observer) {
+                return;
+            }
+            this.rootObserver = observer.setNext(rootObserver);
+        }
+        rootObserver = new FilteringObserver(rootObserver).addFilters(filters);
+
+        //Print the observer chain
+        log.debug("Observer chain");
+        rootObserver.visit(observer -> {
+            log.debug(" Observer: {}", observer.getClass().getSimpleName());
+            if(observer instanceof FilteringObserver) {
+                log.debug("  Filters:");
+                ((FilteringObserver)observer).getFilters().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName() ));
+            }
+            if(observer instanceof ListenerTriggeringObserver) {
+                log.debug("  Listeners:");
+                ((ListenerTriggeringObserver)observer).getListeners().forEach(filter -> log.debug("    - {}", filter.getClass().getSimpleName()));
+            }
+        });
+    }
+
 }

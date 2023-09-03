@@ -4,12 +4,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.LookupDao;
-import io.appform.dropwizard.sharding.dao.listeners.TestListenerFactory;
 import io.appform.dropwizard.sharding.dao.testdata.entities.ScrollTestEntity;
+import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.scroll.ScrollPointer;
 import io.appform.dropwizard.sharding.scroll.ScrollResult;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
-import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import lombok.extern.slf4j.Slf4j;
@@ -46,14 +45,15 @@ public class ScrollTest {
         for (int i = 0; i < 2; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
         }
-        final ShardManager shardManager = new BalancedShardManager(sessionFactories.size());
-        final ShardCalculator<String> shardCalculator = new ShardCalculator<>(shardManager,
-                                                                              new ConsistentHashBucketIdExtractor<>(
-                                                                                      shardManager));
-        final ShardingBundleOptions shardingOptions= new ShardingBundleOptions();
-        final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
+        val shardManager = new BalancedShardManager(sessionFactories.size());
+        val shardCalculator = new ShardCalculator<String>(shardManager,
+                                                          new ConsistentHashBucketIdExtractor<>(
+                                                                  shardManager));
+        val shardingOptions = new ShardingBundleOptions();
+        val shardInfoProvider = new ShardInfoProvider("default");
+        val observer = new TerminalTransactionObserver();
         lookupDao = new LookupDao<>(sessionFactories, ScrollTestEntity.class, shardCalculator, shardingOptions,
-                                    shardInfoProvider, Lists.newArrayList(new TestListenerFactory()));
+                                    shardInfoProvider, observer);
     }
 
     @Test
@@ -65,20 +65,21 @@ public class ScrollTest {
 
         populateEntities(1, numEntities, ids);
 
-        var result = (ScrollResult<ScrollTestEntity>)null;
+        var result = (ScrollResult<ScrollTestEntity>) null;
         var pointer = (ScrollPointer) null;
 
         //Now scroll up to read everything
         do {
             result = lookupDao.scrollUp(DetachedCriteria.forClass(ScrollTestEntity.class),
-                                     pointer,
-                                     pageSize,
-                                     "id");
+                                        pointer,
+                                        pageSize,
+                                        "id");
             addValuesToSet(entities, result);
             pointer = result.getPointer();
-            log.info("Received {} entities", result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
+            log.info("Received {} entities",
+                     result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
         } while (!result.getResult().isEmpty());
-        assertTrue( "There are " + Sets.difference(ids, entities) + " ids missing in scroll", entities.containsAll(ids));
+        assertTrue("There are " + Sets.difference(ids, entities) + " ids missing in scroll", entities.containsAll(ids));
     }
 
     @Test
@@ -88,18 +89,20 @@ public class ScrollTest {
         val entities = new HashSet<Integer>();
 
         populateEntities(1, numEntities, ids);
-        var result = (ScrollResult<ScrollTestEntity>)null;
-        var pointer = (ScrollPointer)null;
+        var result = (ScrollResult<ScrollTestEntity>) null;
+        var pointer = (ScrollPointer) null;
         do {
             result = lookupDao.scrollDown(DetachedCriteria.forClass(ScrollTestEntity.class),
-                                     pointer,
-                                     10,
-                                     "id");
+                                          pointer,
+                                          10,
+                                          "id");
             addValuesToSet(entities, result);
             pointer = result.getPointer();
-            log.info("Received {} entities", result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
+            log.info("Received {} entities",
+                     result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
         } while (result.getResult().size() != 0);
-        assertTrue( "There are " + Sets.difference(ids, entities).size() + " ids missing in scroll", entities.containsAll(ids));
+        assertTrue("There are " + Sets.difference(ids, entities).size() + " ids missing in scroll",
+                   entities.containsAll(ids));
         populateEntities(numEntities + 1, 2 * numEntities, ids);
 
         /*Pointer does not need to be reset here. This is because sort order is on the auto increment id field.
@@ -107,14 +110,15 @@ public class ScrollTest {
 
         do {
             result = lookupDao.scrollDown(DetachedCriteria.forClass(ScrollTestEntity.class),
-                                     pointer,
-                                     10,
-                                     "id");
+                                          pointer,
+                                          10,
+                                          "id");
             addValuesToSet(entities, result);
             pointer = result.getPointer();
             log.info("Received {} entities", result.getResult().size());
         } while (result.getResult().size() != 0);
-        assertTrue( "There are " + Sets.difference(ids, entities).size() + " ids missing in scroll", entities.containsAll(ids));
+        assertTrue("There are " + Sets.difference(ids, entities).size() + " ids missing in scroll",
+                   entities.containsAll(ids));
     }
 
     private static void addValuesToSet(HashSet<Integer> entities, ScrollResult<ScrollTestEntity> result) {

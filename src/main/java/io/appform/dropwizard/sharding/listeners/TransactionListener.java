@@ -1,10 +1,12 @@
 package io.appform.dropwizard.sharding.listeners;
 
+import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
+
 public interface TransactionListener {
 
-    void beforeExecute(final TransactionListenerContext listenerContext);
+    void beforeExecute(final TransactionExecutionContext listenerContext);
 
-    void afterExecute(final TransactionListenerContext listenerContext);
+    void afterExecute(final TransactionExecutionContext listenerContext);
 
-    void afterException(final TransactionListenerContext listenerContext, final Throwable e);
+    void afterException(final TransactionExecutionContext listenerContext, final Throwable e);
 }

@@ -1,6 +1,6 @@
 package io.appform.dropwizard.sharding.dao.listeners;
 
-import io.appform.dropwizard.sharding.listeners.TransactionListenerContext;
+import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
 import org.junit.Assert;
 
@@ -19,21 +19,21 @@ public class TestListener implements TransactionListener {
     }
 
     @Override
-    public void beforeExecute(TransactionListenerContext listenerContext) {
+    public void beforeExecute(TransactionExecutionContext listenerContext) {
         validateContext(listenerContext);
     }
 
     @Override
-    public void afterExecute(TransactionListenerContext listenerContext) {
+    public void afterExecute(TransactionExecutionContext listenerContext) {
         validateContext(listenerContext);
     }
 
     @Override
-    public void afterException(TransactionListenerContext listenerContext, Throwable e) {
+    public void afterException(TransactionExecutionContext listenerContext, Throwable e) {
         validateContext(listenerContext);
     }
 
-    private void validateContext(final TransactionListenerContext listenerContext) {
+    private void validateContext(final TransactionExecutionContext listenerContext) {
         Assert.assertEquals(shardName, listenerContext.getShardName());
         Assert.assertNotNull(listenerContext.getOpType());
         Assert.assertEquals(daoClass, listenerContext.getDaoClass());
