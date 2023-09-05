@@ -374,8 +374,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     }
 
     private void setupObservers() {
-        registerObserver(new TransactionMetricObserver(metricManager));
-
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
@@ -385,6 +383,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             }
             this.rootObserver = observer.setNext(rootObserver);
         }
+        rootObserver = new TransactionMetricObserver(metricManager).setNext(rootObserver);
         rootObserver = new FilteringObserver(rootObserver).addFilters(filters);
 
         //Print the observer chain
