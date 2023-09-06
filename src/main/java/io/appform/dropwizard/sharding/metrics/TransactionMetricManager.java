@@ -13,14 +13,14 @@ import java.util.function.Supplier;
 
 public class TransactionMetricManager {
 
-    private Supplier<MetricConfig> metricConfigSupplier;
-    private MetricRegistry metricRegistry;
+    private final Supplier<MetricConfig> metricConfigSupplier;
+    private final MetricRegistry metricRegistry;
     private static final String METRIC_PREFIX = "db.sharding";
     private static final String DELIMITER = ".";
     private static final String DELIMITER_REPLACEMENT = "_";
 
-    public void initialize(final Supplier<MetricConfig> metricConfigSupplier,
-                           final MetricRegistry metricRegistry) {
+    public TransactionMetricManager(final Supplier<MetricConfig> metricConfigSupplier,
+                                    final MetricRegistry metricRegistry) {
         this.metricConfigSupplier = metricConfigSupplier;
         this.metricRegistry = metricRegistry;
     }
@@ -30,7 +30,7 @@ public class TransactionMetricManager {
             return false;
         }
         val metricConfig = metricConfigSupplier.get();
-        if(metricConfig == null) {
+        if (metricConfig == null) {
             return false;
         }
 

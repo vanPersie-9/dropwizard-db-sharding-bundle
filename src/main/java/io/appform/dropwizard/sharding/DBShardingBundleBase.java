@@ -17,6 +17,7 @@
 
 package io.appform.dropwizard.sharding;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -108,8 +109,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private TransactionObserver rootObserver;
 
-    private TransactionMetricManager metricManager;
-
     protected DBShardingBundleBase(
             String dbNamespace,
             Class<?> entity,
@@ -151,7 +150,6 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                          shardInfoProvider,
                                                          blacklistingStore,
                                                          shardManager);
-        this.metricManager = new TransactionMetricManager();
         IntStream.range(0, numShards).forEach(
                 shard -> shardBundles.add(new HibernateBundle<T>(inEntities, new SessionFactoryFactory()) {
                     @Override
@@ -178,8 +176,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
-        metricManager.initialize(getMetricConfig(configuration), environment.metrics());
-        setupObservers();
+        setupObservers(configuration, environment.metrics());
     }
 
     public final void registerObserver(final TransactionObserver observer) {
@@ -379,7 +376,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                       new ConsistentHashBucketIdExtractor<>(this.shardManager)));
     }
 
-    private void setupObservers() {
+    private void setupObservers(final T config,
+                                final MetricRegistry metricRegistry) {
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
@@ -389,7 +387,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             }
             this.rootObserver = observer.setNext(rootObserver);
         }
-        rootObserver = new TransactionMetricObserver(metricManager).setNext(rootObserver);
+        rootObserver = new TransactionMetricObserver(new TransactionMetricManager(getMetricConfig(config),
+                metricRegistry)).setNext(rootObserver);
         rootObserver = new FilteringObserver(rootObserver).addFilters(filters);
 
         //Print the observer chain

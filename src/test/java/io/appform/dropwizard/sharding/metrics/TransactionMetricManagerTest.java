@@ -10,36 +10,35 @@ import org.junit.Test;
 
 public class TransactionMetricManagerTest {
 
-    private final TransactionMetricManager metricManager = new TransactionMetricManager();
-
     @Test
     public void testIsMetricApplicable() {
-        metricManager.initialize(null, null);
+        TransactionMetricManager metricManager = new TransactionMetricManager(null, null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(() -> null, null);
+        metricManager = new TransactionMetricManager(() -> null, null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(true).build(), null);
+        metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(true).build(), null);
         Assert.assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
+        metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getCanonicalName()))
                 .build(), null);
         Assert.assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
+        metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getSimpleName()))
                 .build(), null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
+        metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .build(), null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
     }
 
     @Test
     public void testGetDaoMetricPrefix() {
+        val metricManager = new TransactionMetricManager(null, null);
         val metricPrefix = metricManager.getDaoMetricPrefix(this.getClass());
         Assert.assertEquals("db.sharding.operation.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest",
                 metricPrefix);
@@ -48,7 +47,7 @@ public class TransactionMetricManagerTest {
     @Test
     public void testGetDaoOpMetricData() {
         val metricRegistry = new MetricRegistry();
-        metricManager.initialize(null, metricRegistry);
+        val metricManager = new TransactionMetricManager(null, metricRegistry);
         val metricPrefix = "test";
         val context = TransactionExecutionContext.builder()
                 .opType("save")
@@ -65,7 +64,7 @@ public class TransactionMetricManagerTest {
     @Test
     public void testGetDaoOpMetricDataWithLockedContextMode() {
         val metricRegistry = new MetricRegistry();
-        metricManager.initialize(null, metricRegistry);
+        val metricManager = new TransactionMetricManager(null, metricRegistry);
         val metricPrefix = "test";
         val context = TransactionExecutionContext.builder()
                 .opType("save")
@@ -83,7 +82,7 @@ public class TransactionMetricManagerTest {
     @Test
     public void testGetShardMetricData() {
         val metricRegistry = new MetricRegistry();
-        metricManager.initialize(null, metricRegistry);
+        val metricManager = new TransactionMetricManager(null, metricRegistry);
         val shardName = "test";
         val metricData = metricManager.getShardMetricData(shardName);
         val metrics = metricRegistry.getMetrics();
@@ -98,7 +97,7 @@ public class TransactionMetricManagerTest {
     @Test
     public void testGetEntityMetricData() {
         val metricRegistry = new MetricRegistry();
-        metricManager.initialize(null, metricRegistry);
+        val metricManager = new TransactionMetricManager(null, metricRegistry);
         val entityClass = this.getClass();
         val metricData = metricManager.getEntityMetricData(entityClass);
         val metrics = metricRegistry.getMetrics();
