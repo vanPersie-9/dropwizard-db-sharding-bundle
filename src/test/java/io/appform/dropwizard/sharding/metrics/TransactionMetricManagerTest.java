@@ -17,20 +17,23 @@ public class TransactionMetricManagerTest {
         metricManager.initialize(null, null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(MetricConfig.builder().enabledForAll(true).build(), null);
+        metricManager.initialize(() -> null, null);
+        Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
+
+        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(true).build(), null);
         Assert.assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(MetricConfig.builder().enabledForAll(false)
+        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getCanonicalName()))
                 .build(), null);
         Assert.assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(MetricConfig.builder().enabledForAll(false)
+        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getSimpleName()))
                 .build(), null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
-        metricManager.initialize(MetricConfig.builder().enabledForAll(false)
+        metricManager.initialize(() -> MetricConfig.builder().enabledForAll(false)
                 .build(), null);
         Assert.assertFalse(metricManager.isMetricApplicable(this.getClass()));
     }

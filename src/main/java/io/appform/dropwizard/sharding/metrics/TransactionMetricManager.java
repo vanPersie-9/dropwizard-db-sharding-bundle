@@ -9,23 +9,28 @@ import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public class TransactionMetricManager {
 
-    private MetricConfig metricConfig;
+    private Supplier<MetricConfig> metricConfigSupplier;
     private MetricRegistry metricRegistry;
     private static final String METRIC_PREFIX = "db.sharding";
     private static final String DELIMITER = ".";
     private static final String DELIMITER_REPLACEMENT = "_";
 
-    public void initialize(final MetricConfig metricConfig,
+    public void initialize(final Supplier<MetricConfig> metricConfigSupplier,
                            final MetricRegistry metricRegistry) {
-        this.metricConfig = metricConfig;
+        this.metricConfigSupplier = metricConfigSupplier;
         this.metricRegistry = metricRegistry;
     }
 
     public boolean isMetricApplicable(final Class<?> entityClass) {
-        if (metricConfig == null) {
+        if (metricConfigSupplier == null) {
+            return false;
+        }
+        val metricConfig = metricConfigSupplier.get();
+        if(metricConfig == null) {
             return false;
         }
 

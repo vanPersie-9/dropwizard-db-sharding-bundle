@@ -25,6 +25,7 @@ import io.appform.dropwizard.sharding.admin.BlacklistShardTask;
 import io.appform.dropwizard.sharding.admin.UnblacklistShardTask;
 import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
+import io.appform.dropwizard.sharding.config.MetricConfig;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.CacheableLookupDao;
@@ -70,6 +71,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -176,7 +178,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
-        metricManager.initialize(getConfig(configuration).getMetricConfig(), environment.metrics());
+        metricManager.initialize(getMetricConfig(configuration), environment.metrics());
         setupObservers();
     }
 
@@ -235,6 +237,10 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     }
 
     protected abstract ShardedHibernateFactory getConfig(T config);
+
+    protected Supplier<MetricConfig> getMetricConfig(T config) {
+        return () -> getConfig(config).getMetricConfig();
+    }
 
     protected ShardBlacklistingStore getBlacklistingStore() {
         return new InMemoryLocalShardBlacklistingStore();
