@@ -35,9 +35,9 @@ import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
 import java.util.List;
@@ -69,7 +69,7 @@ public class RelationalDaoTest {
         return configuration.buildSessionFactory(serviceRegistry);
     }
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 16; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -86,7 +86,7 @@ public class RelationalDaoTest {
                                                             new TerminalTransactionObserver())));
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionFactories.forEach(SessionFactory::close);
     }

@@ -39,16 +39,19 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class CacheableLookupDaoTest {
 
@@ -80,7 +83,7 @@ public class CacheableLookupDaoTest {
     }
 
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 2; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -258,7 +261,7 @@ public class CacheableLookupDaoTest {
                                                 }, shardInfoProvider, new TerminalTransactionObserver());
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionFactories.forEach(SessionFactory::close);
     }

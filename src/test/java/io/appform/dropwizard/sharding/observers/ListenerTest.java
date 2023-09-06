@@ -8,8 +8,8 @@ import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
 import lombok.SneakyThrows;
 import lombok.val;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -55,7 +55,7 @@ public class ListenerTest extends BundleBasedTestBase {
         return bundle;
     }
 
-    @Before
+    @BeforeEach
     public void reset() {
         cl.preCounter.set(0);
         cl.postCounter.set(0);

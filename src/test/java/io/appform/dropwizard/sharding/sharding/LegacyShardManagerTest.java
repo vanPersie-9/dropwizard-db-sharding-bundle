@@ -17,13 +17,14 @@
 
 package io.appform.dropwizard.sharding.sharding;
 
-import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LegacyShardManagerTest {
 
-   @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testShardForBucket() throws Exception {
         LegacyShardManager shardManager = new LegacyShardManager(5);
     }

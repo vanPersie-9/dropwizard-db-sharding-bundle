@@ -40,16 +40,19 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LookupDaoTest {
 
@@ -82,7 +85,7 @@ public class LookupDaoTest {
         return configuration.buildSessionFactory(serviceRegistry);
     }
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 2; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -104,7 +107,7 @@ public class LookupDaoTest {
                                        shardInfoProvider, observer);
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionFactories.forEach(SessionFactory::close);
     }
@@ -354,10 +357,10 @@ public class LookupDaoTest {
                 .text("Some Text")
                 .build();
         lookupDao.save(testEntity);
-        Assert.assertNotNull(lookupDao.get("testId")
+        assertNotNull(lookupDao.get("testId")
                                      .orElse(null));
-        Assert.assertTrue(lookupDao.delete("testId"));
-        Assert.assertNull(lookupDao.get("testId")
+        assertTrue(lookupDao.delete("testId"));
+        Assertions.assertNull(lookupDao.get("testId")
                                   .orElse(null));
     }
 
@@ -366,7 +369,7 @@ public class LookupDaoTest {
         DetachedCriteria criteria = DetachedCriteria.forClass(TestEntity.class)
                 .add(Restrictions.eq("text", "TEST_TYPE"));
 
-        Assert.assertEquals(
+        assertEquals(
                 0L,
                 (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
         );
@@ -380,14 +383,14 @@ public class LookupDaoTest {
         testEntity.setExternalId("testId3");
         lookupDao.save(testEntity);
 
-        Assert.assertEquals(
+        assertEquals(
                 2L,
                 (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
         );
 
 
         lookupDao.delete("testId2");
-        Assert.assertEquals(
+        assertEquals(
                 1L,
                 (long)lookupDao.count(criteria).stream().reduce(0L, Long::sum)
         );
