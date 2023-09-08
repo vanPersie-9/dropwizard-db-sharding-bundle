@@ -98,9 +98,9 @@ public class LookupDaoTest {
                                     shardInfoProvider, observer);
         phoneDao = new LookupDao<>(sessionFactories, Phone.class, shardCalculator, shardingOptions,
                                    shardInfoProvider, observer);
-        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator,
+        transactionDao = new RelationalDao<>(sessionFactories, Transaction.class, shardCalculator, shardingOptions,
                                              shardInfoProvider, observer);
-        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator,
+        auditDao = new RelationalDao<>(sessionFactories, Audit.class, shardCalculator, shardingOptions,
                                        shardInfoProvider, observer);
     }
 
