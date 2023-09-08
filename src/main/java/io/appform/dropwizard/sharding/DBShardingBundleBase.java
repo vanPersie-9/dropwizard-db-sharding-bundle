@@ -306,7 +306,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                             clazz,
                                             new ShardCalculator<>(this.shardManager,
                                                                   new ConsistentHashBucketIdExtractor<>(this.shardManager)),
-                                            ShardingBundleOptions.builder().build(),
+                                            this.shardingOptions,
                                             cacheManager,
                                             shardInfoProvider,
                                             rootObserver);
