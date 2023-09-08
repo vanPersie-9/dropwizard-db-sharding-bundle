@@ -122,18 +122,19 @@ public class LockTest {
                 .myId("0")
                 .build();
         lookupDao.save(p1);
-        lookupDao.lockAndGetExecutor("0")
-                .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
-                .save(relationDao, parent -> {
-                    SomeOtherObject result = SomeOtherObject.builder()
-                            .myId(parent.getMyId())
-                            .value("Hello")
-                            .build();
-                    parent.setName("Changed");
-                    return result;
-                })
-                .mutate(parent -> parent.setName("Changed"))
-                .execute();
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> lookupDao.lockAndGetExecutor("0")
+                        .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
+                        .save(relationDao, parent -> {
+                            SomeOtherObject result = SomeOtherObject.builder()
+                                    .myId(parent.getMyId())
+                                    .value("Hello")
+                                    .build();
+                            parent.setName("Changed");
+                            return result;
+                        })
+                        .mutate(parent -> parent.setName("Changed"))
+                        .execute());
 
     }
 
