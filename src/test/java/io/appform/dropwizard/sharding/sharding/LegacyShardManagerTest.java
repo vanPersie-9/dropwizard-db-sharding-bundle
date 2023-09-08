@@ -26,11 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class LegacyShardManagerTest {
 
     @Test
-    public void testShardForBucket() throws Exception {
-        LegacyShardManager shardManager = new LegacyShardManager(5);
-    }
-
-    @Test
     public void testShardForOddBucket() {
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> new LegacyShardManager(9));
