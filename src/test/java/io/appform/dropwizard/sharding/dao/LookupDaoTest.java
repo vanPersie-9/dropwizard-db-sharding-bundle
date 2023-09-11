@@ -41,7 +41,6 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +51,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LookupDaoTest {
@@ -360,8 +360,8 @@ public class LookupDaoTest {
         assertNotNull(lookupDao.get("testId")
                 .orElse(null));
         assertTrue(lookupDao.delete("testId"));
-        Assertions.assertNull(lookupDao.get("testId")
-                .orElse(null));
+        assertNull(lookupDao.get("testId")
+                                  .orElse(null));
     }
 
     @Test

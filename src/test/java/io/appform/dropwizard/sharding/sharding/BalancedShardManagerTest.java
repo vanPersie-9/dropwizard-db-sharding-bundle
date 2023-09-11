@@ -18,26 +18,26 @@
 package io.appform.dropwizard.sharding.sharding;
 
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BalancedShardManagerTest {
 
     @Test
     public void testShardForBucket() throws Exception {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(5));
+        assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(5));
     }
 
     @Test
     public void testShardForOddBucket() throws Exception {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(9));
+        assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(9));
     }
 
     @Test
     public void testShardForEvenNon2PowerBucket() throws Exception {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(40));
+        assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(40));
     }
 
     @Test

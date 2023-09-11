@@ -18,10 +18,10 @@
 package io.appform.dropwizard.sharding.sharding;
 
 import io.appform.dropwizard.sharding.exceptions.ShardBlacklistedException;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ShardManagerTest {
 
@@ -39,7 +39,7 @@ public class ShardManagerTest {
         Thread.sleep(5000); //Sleeping for 5 seconds
         try {
             shardManager.shardForBucket(100);
-            Assertions.fail("Should have errored out");
+            fail("Should have errored out");
         } catch (ShardBlacklistedException e) {
 
         }

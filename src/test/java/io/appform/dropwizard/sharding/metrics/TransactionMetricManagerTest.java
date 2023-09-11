@@ -5,37 +5,38 @@ import com.google.common.collect.ImmutableSet;
 import io.appform.dropwizard.sharding.config.MetricConfig;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TransactionMetricManagerTest {
 
     @Test
     public void testIsMetricApplicable() {
         TransactionMetricManager metricManager = new TransactionMetricManager(null, null);
-        Assertions.assertFalse(metricManager.isMetricApplicable(this.getClass()));
+        assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
         metricManager = new TransactionMetricManager(() -> null, null);
-        Assertions.assertFalse(metricManager.isMetricApplicable(this.getClass()));
+        assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
         metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(true).build(), null);
-        Assertions.assertTrue(metricManager.isMetricApplicable(this.getClass()));
+        assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
         metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getCanonicalName()))
                 .build(), null);
-        Assertions.assertTrue(metricManager.isMetricApplicable(this.getClass()));
+        assertTrue(metricManager.isMetricApplicable(this.getClass()));
 
         metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .enabledForEntities(ImmutableSet.of(this.getClass().getSimpleName()))
                 .build(), null);
-        Assertions.assertFalse(metricManager.isMetricApplicable(this.getClass()));
+        assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
         metricManager = new TransactionMetricManager(() -> MetricConfig.builder().enabledForAll(false)
                 .build(), null);
-        Assertions.assertFalse(metricManager.isMetricApplicable(this.getClass()));
+        assertFalse(metricManager.isMetricApplicable(this.getClass()));
     }
 
     @Test

@@ -1,10 +1,10 @@
 package io.appform.dropwizard.sharding;
 
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ShardInfoProviderTest {
 
@@ -34,10 +34,10 @@ public class ShardInfoProviderTest {
         assertEquals("default", namespace);
 
         namespace = shardInfoProvider.namespace("connectionpool");
-        Assertions.assertNull(namespace);
+        assertNull(namespace);
 
         namespace = shardInfoProvider.namespace("connectionpool-default");
-        Assertions.assertNull(namespace);
+        assertNull(namespace);
 
         namespace = shardInfoProvider.namespace("connectionpool-test-1");
         assertEquals("test", namespace);

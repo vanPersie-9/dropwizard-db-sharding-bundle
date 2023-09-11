@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Property;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 /**
@@ -119,7 +119,7 @@ public class ErrorListenerTest extends BundleBasedTestBase {
                         .setValue("CV1"))
                 .execute();
         assertNotNull(parent);
-        Assertions.assertThrows(Exception.class,
+        assertThrows(Exception.class,
                 () -> parentDao.lockAndGetExecutor(parent.getName())
                         .update(childDao,
                                 DetachedCriteria.forClass(SimpleChild.class)

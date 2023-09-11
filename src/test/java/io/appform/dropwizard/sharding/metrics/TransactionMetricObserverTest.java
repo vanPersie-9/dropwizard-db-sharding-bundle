@@ -6,12 +6,12 @@ import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TransactionMetricObserverTest {
 
@@ -104,7 +104,7 @@ public class TransactionMetricObserverTest {
 
         Mockito.doReturn(true).when(metricManager).isMetricApplicable(context.getEntityClass());
 
-        Assertions.assertThrows(RuntimeException.class, () -> transactionMetricObserver.execute(context, this::terminateWithException));
+        assertThrows(RuntimeException.class, () -> transactionMetricObserver.execute(context, this::terminateWithException));
         validateCache(entityMetricData, shardMetricData, daoMetricData, "test", context);
         validateMetrics(entityMetricData, shardMetricData, daoMetricData, 0, 1);
     }
