@@ -27,9 +27,9 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -69,7 +69,7 @@ public class RelationalReadOnlyLockedContextTest {
         return configuration.buildSessionFactory(serviceRegistry);
     }
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 2; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -88,7 +88,7 @@ public class RelationalReadOnlyLockedContextTest {
                 shardInfoProvider, observer);
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionFactories.forEach(SessionFactory::close);
     }
