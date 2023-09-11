@@ -1,7 +1,6 @@
 package io.appform.dropwizard.sharding.dao.interceptors;
 
 import lombok.experimental.UtilityClass;
-import org.junit.jupiter.api.Assertions;
 import org.slf4j.MDC;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
