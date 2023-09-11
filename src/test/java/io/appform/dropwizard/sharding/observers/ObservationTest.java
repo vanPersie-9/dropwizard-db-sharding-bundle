@@ -38,12 +38,11 @@ public class ObservationTest extends BundleBasedTestBase {
         public <T> T execute(TransactionExecutionContext context, Supplier<T> supplier) {
             try {
                 return proceed(context, supplier);
-            }
-            finally {
+            } finally {
                 log.info("Incrementing counter for {}.{}. New Value: {}",
-                         context.getDaoClass().getSimpleName(),
-                         context.getOpType(),
-                         callCounter.incrementAndGet());
+                        context.getDaoClass().getSimpleName(),
+                        context.getOpType(),
+                        callCounter.incrementAndGet());
             }
         }
     }
@@ -76,13 +75,13 @@ public class ObservationTest extends BundleBasedTestBase {
         val childDao = bundle.createRelatedObjectDao(SimpleChild.class);
 
         val parent = parentDao.save(new SimpleParent()
-                                            .setName("P1"))
+                        .setName("P1"))
                 .orElse(null);
         assertNotNull(parent);
         val child = childDao.save(parent.getName(),
-                                  new SimpleChild()
-                                          .setParent(parent.getName())
-                                          .setValue("CV1"))
+                        new SimpleChild()
+                                .setParent(parent.getName())
+                                .setValue("CV1"))
                 .orElse(null);
         assertNotNull(child);
         assertEquals(2, co.callCounter.get());
@@ -97,7 +96,7 @@ public class ObservationTest extends BundleBasedTestBase {
         val childDao = bundle.createRelatedObjectDao(SimpleChild.class);
 
         val parent = parentDao.saveAndGetExecutor(new SimpleParent()
-                                                          .setName("P1"))
+                        .setName("P1"))
                 .save(childDao, parentObj -> new SimpleChild()
                         .setParent(parentObj.getName())
                         .setValue("CV1"))
@@ -105,11 +104,11 @@ public class ObservationTest extends BundleBasedTestBase {
         assertNotNull(parent);
         assertEquals(2, co.callCounter.get());
         assertEquals(1, childDao.select(parent.getName(),
-                                        DetachedCriteria.forClass(SimpleChild.class)
-                                                .add(Property.forName(SimpleChild.Fields.parent)
-                                                             .eq(parent.getName())),
-                                        0,
-                                        Integer.MAX_VALUE)
+                        DetachedCriteria.forClass(SimpleChild.class)
+                                .add(Property.forName(SimpleChild.Fields.parent)
+                                        .eq(parent.getName())),
+                        0,
+                        Integer.MAX_VALUE)
                 .size());
         assertEquals(3, co.callCounter.get());
     }
@@ -123,7 +122,7 @@ public class ObservationTest extends BundleBasedTestBase {
         val childDao = bundle.createRelatedObjectDao(SimpleChild.class);
 
         val parent = parentDao.saveAndGetExecutor(new SimpleParent()
-                                                          .setName("P1"))
+                        .setName("P1"))
                 .save(childDao, parentObj -> new SimpleChild()
                         .setParent(parentObj.getName())
                         .setValue("CV1"))
@@ -131,13 +130,13 @@ public class ObservationTest extends BundleBasedTestBase {
         assertNotNull(parent);
         assertEquals(2, co.callCounter.get());
         val augmentedParent = parentDao.readOnlyExecutor(parent.getName())
-                        .readAugmentParent(childDao, DetachedCriteria.forClass(SimpleChild.class)
-                                                   .add(Property.forName(SimpleChild.Fields.parent)
-                                                                .eq(parent.getName())),
-                                           0,
-                                           Integer.MAX_VALUE,
-                                           (parentObject, children) -> parentObject.getChildren().addAll(children))
-                                .execute()
+                .readAugmentParent(childDao, DetachedCriteria.forClass(SimpleChild.class)
+                                .add(Property.forName(SimpleChild.Fields.parent)
+                                        .eq(parent.getName())),
+                        0,
+                        Integer.MAX_VALUE,
+                        (parentObject, children) -> parentObject.getChildren().addAll(children))
+                .execute()
                 .orElse(null);
         assertNotNull(augmentedParent);
         assertEquals(1, augmentedParent.getChildren().size());

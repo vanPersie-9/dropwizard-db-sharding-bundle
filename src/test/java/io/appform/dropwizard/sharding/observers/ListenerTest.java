@@ -71,13 +71,13 @@ public class ListenerTest extends BundleBasedTestBase {
         val childDao = bundle.createRelatedObjectDao(SimpleChild.class);
 
         val parent = parentDao.save(new SimpleParent()
-                                            .setName("P1"))
+                        .setName("P1"))
                 .orElse(null);
         assertNotNull(parent);
         val child = childDao.save(parent.getName(),
-                                  new SimpleChild()
-                                          .setParent(parent.getName())
-                                          .setValue("CV1"))
+                        new SimpleChild()
+                                .setParent(parent.getName())
+                                .setValue("CV1"))
                 .orElse(null);
         assertNotNull(child);
         assertEquals(2, cl.preCounter.get());

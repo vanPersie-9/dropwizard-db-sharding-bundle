@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class TransactionMetricObserverTest {
 
     private TransactionMetricObserver transactionMetricObserver;
@@ -25,7 +27,7 @@ public class TransactionMetricObserverTest {
     @Test
     public void testExecuteWhenMetricNotApplicable() {
         Mockito.doReturn(false).when(metricManager).isMetricApplicable(null);
-        Assertions.assertEquals(terminate(),
+        assertEquals(terminate(),
                 transactionMetricObserver.execute(TransactionExecutionContext.builder().build(), this::terminate));
     }
 
@@ -63,7 +65,7 @@ public class TransactionMetricObserverTest {
 
         Mockito.doReturn(true).when(metricManager).isMetricApplicable(context.getEntityClass());
 
-        Assertions.assertEquals(terminate(), transactionMetricObserver.execute(context, this::terminate));
+        assertEquals(terminate(), transactionMetricObserver.execute(context, this::terminate));
         validateCache(entityMetricData, shardMetricData, daoMetricData, "test", context);
         validateMetrics(entityMetricData, shardMetricData, daoMetricData, 1, 0);
     }
@@ -112,18 +114,18 @@ public class TransactionMetricObserverTest {
                                final MetricData daoMetricData,
                                final String daoMetricPrefix,
                                final TransactionExecutionContext context) {
-        Assertions.assertEquals(1, transactionMetricObserver.getEntityMetricCache().size());
-        Assertions.assertEquals(entityMetricData, transactionMetricObserver.getEntityMetricCache().get(context.getEntityClass()));
+        assertEquals(1, transactionMetricObserver.getEntityMetricCache().size());
+        assertEquals(entityMetricData, transactionMetricObserver.getEntityMetricCache().get(context.getEntityClass()));
 
-        Assertions.assertEquals(1, transactionMetricObserver.getShardMetricCache().size());
-        Assertions.assertEquals(shardMetricData, transactionMetricObserver.getShardMetricCache().get(context.getShardName()));
+        assertEquals(1, transactionMetricObserver.getShardMetricCache().size());
+        assertEquals(shardMetricData, transactionMetricObserver.getShardMetricCache().get(context.getShardName()));
 
-        Assertions.assertEquals(1, transactionMetricObserver.getDaoMetricPrefixCache().size());
-        Assertions.assertEquals(daoMetricPrefix,
+        assertEquals(1, transactionMetricObserver.getDaoMetricPrefixCache().size());
+        assertEquals(daoMetricPrefix,
                 transactionMetricObserver.getDaoMetricPrefixCache().get(context.getDaoClass()));
 
-        Assertions.assertEquals(1, transactionMetricObserver.getDaoToOpTypeMetricCache().size());
-        Assertions.assertEquals(daoMetricData,
+        assertEquals(1, transactionMetricObserver.getDaoToOpTypeMetricCache().size());
+        assertEquals(daoMetricData,
                 transactionMetricObserver.getDaoToOpTypeMetricCache().get(daoMetricPrefix).get(context.getOpType()));
     }
 
@@ -132,25 +134,25 @@ public class TransactionMetricObserverTest {
                                  final MetricData daoMetricData,
                                  final int successCount,
                                  final int failedCount) {
-        Assertions.assertEquals(1, entityMetricData.getTotal().getCount());
-        Assertions.assertEquals(1, shardMetricData.getTotal().getCount());
-        Assertions.assertEquals(1, daoMetricData.getTotal().getCount());
+        assertEquals(1, entityMetricData.getTotal().getCount());
+        assertEquals(1, shardMetricData.getTotal().getCount());
+        assertEquals(1, daoMetricData.getTotal().getCount());
 
-        Assertions.assertEquals(1, entityMetricData.getTimer().getCount());
-        Assertions.assertEquals(1, shardMetricData.getTimer().getCount());
-        Assertions.assertEquals(1, daoMetricData.getTimer().getCount());
+        assertEquals(1, entityMetricData.getTimer().getCount());
+        assertEquals(1, shardMetricData.getTimer().getCount());
+        assertEquals(1, daoMetricData.getTimer().getCount());
 
-        Assertions.assertEquals(successCount, entityMetricData.getSuccess().getCount());
-        Assertions.assertEquals(successCount, shardMetricData.getSuccess().getCount());
-        Assertions.assertEquals(successCount, daoMetricData.getSuccess().getCount());
+        assertEquals(successCount, entityMetricData.getSuccess().getCount());
+        assertEquals(successCount, shardMetricData.getSuccess().getCount());
+        assertEquals(successCount, daoMetricData.getSuccess().getCount());
 
-        Assertions.assertEquals(failedCount, entityMetricData.getFailed().getCount());
-        Assertions.assertEquals(failedCount, shardMetricData.getFailed().getCount());
-        Assertions.assertEquals(failedCount, daoMetricData.getFailed().getCount());
+        assertEquals(failedCount, entityMetricData.getFailed().getCount());
+        assertEquals(failedCount, shardMetricData.getFailed().getCount());
+        assertEquals(failedCount, daoMetricData.getFailed().getCount());
     }
 
     private Integer terminate() {
-         return 1;
+        return 1;
     }
 
     private Integer terminateWithException() {

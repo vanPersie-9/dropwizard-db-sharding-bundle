@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ShardManagerTest {
 
-   @Test
+    @Test
     public void testShardForBucket() throws Exception {
         ShardManager shardManager = new LegacyShardManager(8);
         assertEquals(0, shardManager.shardForBucket(100));
