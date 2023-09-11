@@ -19,8 +19,8 @@ import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.List;
@@ -29,7 +29,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /**
  * Tests out functionality for {@link LookupDao#scrollDown(DetachedCriteria, ScrollPointer, int, String)}
@@ -40,7 +41,7 @@ public class ScrollTest {
 
     private LookupDao<ScrollTestEntity> lookupDao;
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 2; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -79,7 +80,7 @@ public class ScrollTest {
             log.info("Received {} entities",
                      result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
         } while (!result.getResult().isEmpty());
-        assertTrue("There are " + Sets.difference(ids, entities) + " ids missing in scroll", entities.containsAll(ids));
+        assertTrue(entities.containsAll(ids), "There are " + Sets.difference(ids, entities) + " ids missing in scroll");
     }
 
     @Test
@@ -101,8 +102,8 @@ public class ScrollTest {
             log.info("Received {} entities",
                      result.getResult().stream().map(ScrollTestEntity::getId).collect(Collectors.toList()));
         } while (result.getResult().size() != 0);
-        assertTrue("There are " + Sets.difference(ids, entities).size() + " ids missing in scroll",
-                   entities.containsAll(ids));
+        assertTrue(entities.containsAll(ids),
+                   "There are " + Sets.difference(ids, entities).size() + " ids missing in scroll");
         populateEntities(numEntities + 1, 2 * numEntities, ids);
 
         /*Pointer does not need to be reset here. This is because sort order is on the auto increment id field.
@@ -117,8 +118,8 @@ public class ScrollTest {
             pointer = result.getPointer();
             log.info("Received {} entities", result.getResult().size());
         } while (result.getResult().size() != 0);
-        assertTrue("There are " + Sets.difference(ids, entities).size() + " ids missing in scroll",
-                   entities.containsAll(ids));
+        assertTrue(entities.containsAll(ids),
+                   "There are " + Sets.difference(ids, entities).size() + " ids missing in scroll");
     }
 
     private static void addValuesToSet(HashSet<Integer> entities, ScrollResult<ScrollTestEntity> result) {

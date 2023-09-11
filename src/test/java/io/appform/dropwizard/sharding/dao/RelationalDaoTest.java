@@ -37,16 +37,16 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Property;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class RelationalDaoTest {
 
@@ -57,9 +57,9 @@ public class RelationalDaoTest {
     private SessionFactory buildSessionFactory(String dbName) {
         Configuration configuration = new Configuration();
         configuration.setProperty("hibernate.dialect",
-                                  "org.hibernate.dialect.H2Dialect");
+                "org.hibernate.dialect.H2Dialect");
         configuration.setProperty("hibernate.connection.driver_class",
-                                  "org.h2.Driver");
+                "org.h2.Driver");
         configuration.setProperty("hibernate.connection.url", "jdbc:h2:mem:" + dbName);
         configuration.setProperty("hibernate.hbm2ddl.auto", "create");
         configuration.setProperty("hibernate.current_session_context_class", "managed");
@@ -73,7 +73,7 @@ public class RelationalDaoTest {
         return configuration.buildSessionFactory(serviceRegistry);
     }
 
-    @Before
+    @BeforeEach
     public void before() {
         for (int i = 0; i < 16; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
@@ -97,9 +97,10 @@ public class RelationalDaoTest {
                                                   new EntityClassThreadLocalObserver(
                                                           new DaoClassLocalObserver(
                                                                   new TerminalTransactionObserver())));
+
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionFactories.forEach(SessionFactory::close);
     }
@@ -117,9 +118,9 @@ public class RelationalDaoTest {
                 .build();
         relationalDao.saveAll(key, Lists.newArrayList(entityOne, entityTwo));
         List<RelationalEntity> entities = relationalDao.select(key,
-                                                               DetachedCriteria.forClass(RelationalEntity.class),
-                                                               0,
-                                                               10);
+                DetachedCriteria.forClass(RelationalEntity.class),
+                0,
+                10);
         assertEquals(2, entities.size());
 
     }
@@ -180,12 +181,12 @@ public class RelationalDaoTest {
 
         val newValue = UUID.randomUUID().toString();
         int rowsUpdated = relationalDao.updateUsingQuery(relationalKey,
-                                                         UpdateOperationMeta.builder()
-                                                                 .queryName("testUpdateUsingKeyTwo")
-                                                                 .params(ImmutableMap.of("keyTwo", "2",
-                                                                                         "value", newValue))
-                                                                 .build()
-                                                        );
+                UpdateOperationMeta.builder()
+                        .queryName("testUpdateUsingKeyTwo")
+                        .params(ImmutableMap.of("keyTwo", "2",
+                                "value", newValue))
+                        .build()
+        );
         assertEquals(2, rowsUpdated);
 
         val persistedEntityTwo = relationalDao.get(relationalKey, "2").orElse(null);
@@ -227,14 +228,14 @@ public class RelationalDaoTest {
 
         val newValue = UUID.randomUUID().toString();
         int rowsUpdated = relationalDao.updateUsingQuery(relationalKey,
-                                                         UpdateOperationMeta.builder()
-                                                                 .queryName("testUpdateUsingKeyTwo")
-                                                                 .params(ImmutableMap.of("keyTwo",
-                                                                                         UUID.randomUUID().toString(),
-                                                                                         "value",
-                                                                                         newValue))
-                                                                 .build()
-                                                        );
+                UpdateOperationMeta.builder()
+                        .queryName("testUpdateUsingKeyTwo")
+                        .params(ImmutableMap.of("keyTwo",
+                                UUID.randomUUID().toString(),
+                                "value",
+                                newValue))
+                        .build()
+        );
         assertEquals(0, rowsUpdated);
 
 

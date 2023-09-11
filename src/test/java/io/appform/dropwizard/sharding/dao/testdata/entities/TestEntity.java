@@ -20,9 +20,9 @@ package io.appform.dropwizard.sharding.dao.testdata.entities;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import lombok.*;
 import org.hibernate.Hibernate;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.persistence.*;
-import javax.validation.constraints.NotEmpty;
 import java.util.Objects;
 
 @Entity

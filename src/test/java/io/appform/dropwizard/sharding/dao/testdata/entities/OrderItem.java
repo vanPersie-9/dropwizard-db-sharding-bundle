@@ -17,6 +17,7 @@
 
 package io.appform.dropwizard.sharding.dao.testdata.entities;
 
+
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
 

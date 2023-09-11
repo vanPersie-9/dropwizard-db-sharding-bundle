@@ -24,12 +24,12 @@ import io.appform.dropwizard.sharding.scroll.*;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
+import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
-import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.*;
@@ -406,7 +406,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id),
-                                   entityClass, shardInfoProvider, observer);
+                entityClass, shardInfoProvider, observer);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(String id) {
@@ -436,7 +436,6 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
-
                                      dao.sessionFactory,
                 key -> dao.getLocked(key, criteriaUpdater, LockMode.NONE),
                                      entityPopulator,
@@ -455,7 +454,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new LockedContext<>(shardId, dao.sessionFactory, dao::save, entity,
-                                   entityClass, shardInfoProvider, observer);
+                entityClass, shardInfoProvider, observer);
     }
 
     /**
