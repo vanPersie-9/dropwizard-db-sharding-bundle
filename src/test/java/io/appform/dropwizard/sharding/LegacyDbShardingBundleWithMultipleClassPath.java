@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 public class LegacyDbShardingBundleWithMultipleClassPath extends DBShardingBundleTestBase {
 
 
@@ -56,10 +58,10 @@ public class LegacyDbShardingBundleWithMultipleClassPath extends DBShardingBundl
                 .build();
 
         Optional<MultiPackageTestEntity> saveMultiPackageTestEntity = lookupDao.save(multiPackageTestEntity);
-        Assertions.assertEquals(multiPackageTestEntity.getText(), saveMultiPackageTestEntity.get().getText());
+        assertEquals(multiPackageTestEntity.getText(), saveMultiPackageTestEntity.get().getText());
 
         Optional<MultiPackageTestEntity> fetchedMultiPackageTestEntity = lookupDao.get(multiPackageTestEntity.getLookup());
-        Assertions.assertEquals(saveMultiPackageTestEntity.get().getText(), fetchedMultiPackageTestEntity.get().getText());
+        assertEquals(saveMultiPackageTestEntity.get().getText(), fetchedMultiPackageTestEntity.get().getText());
 
         LookupDao<TestEntity> testEntityLookupDao = bundle.createParentObjectDao(TestEntity.class);
 
@@ -68,10 +70,10 @@ public class LegacyDbShardingBundleWithMultipleClassPath extends DBShardingBundl
                 .text("Test Second Package")
                 .build();
         Optional<TestEntity> savedTestEntity = testEntityLookupDao.save(testEntity);
-        Assertions.assertEquals(testEntity.getText(), savedTestEntity.get().getText());
+        assertEquals(testEntity.getText(), savedTestEntity.get().getText());
 
         Optional<TestEntity> fetchedTestEntity = testEntityLookupDao.get(testEntity.getExternalId());
-        Assertions.assertEquals(savedTestEntity.get().getText(), fetchedTestEntity.get().getText());
+        assertEquals(savedTestEntity.get().getText(), fetchedTestEntity.get().getText());
 
 
     }

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -119,7 +120,7 @@ public class ErrorListenerTest extends BundleBasedTestBase {
                         .setValue("CV1"))
                 .execute();
         assertNotNull(parent);
-        Assertions.assertThrows(Exception.class,
+        assertThrows(Exception.class,
                 () -> parentDao.lockAndGetExecutor(parent.getName())
                         .update(childDao,
                                 DetachedCriteria.forClass(SimpleChild.class)

@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -122,7 +123,7 @@ public class LockTest {
                 .myId("0")
                 .build();
         lookupDao.save(p1);
-        Assertions.assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> lookupDao.lockAndGetExecutor("0")
                         .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
                         .save(relationDao, parent -> {
@@ -226,7 +227,7 @@ public class LockTest {
                 .name("Changed")
                 .build();
 
-        Assertions.assertThrows(ConstraintViolationException.class, () -> lookupDao.saveAndGetExecutor(p2)
+        assertThrows(ConstraintViolationException.class, () -> lookupDao.saveAndGetExecutor(p2)
                 .filter(parent -> !Strings.isNullOrEmpty(parent.getName()))
                 .save(relationDao, parent -> SomeOtherObject.builder()
                         .myId(parent.getMyId())
@@ -283,7 +284,7 @@ public class LockTest {
                     childObj.setValue(childModifiedValue);
                     return childObj;
                 }, () -> {
-                    Assertions.fail("New Entity is getting created. It should have been updated.");
+                    fail("New Entity is getting created. It should have been updated.");
                     return SomeOtherObject.builder()
                             .myId(parentId)
                             .value("test")
@@ -303,8 +304,8 @@ public class LockTest {
 
         lookupDao.lockAndGetExecutor(parent.getMyId())
                 .createOrUpdate(relationDao, creationCriteria, childObj -> {
-                    Assertions.assertNotEquals(null, childObj);
-                    Assertions.fail("New Entity is getting updated. It should have been created.");
+                    assertNotEquals(null, childObj);
+                    fail("New Entity is getting updated. It should have been created.");
 
                     childObj.setValue("abcd");
                     return childObj;
@@ -321,7 +322,7 @@ public class LockTest {
                 .findFirst()
                 .get();
         assertEquals(newChildValue, savedChild.getValue());
-        Assertions.assertNotEquals(child.getId(), savedChild.getId());
+        assertNotEquals(child.getId(), savedChild.getId());
         assertEquals(newParentValue, lookupDao.get(parentId).get().getName());
     }
 
