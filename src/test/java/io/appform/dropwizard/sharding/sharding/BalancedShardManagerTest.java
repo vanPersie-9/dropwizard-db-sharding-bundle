@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Santanu Sinha <santanu.sinha@gmail.com>
- *  
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,25 +17,27 @@
 
 package io.appform.dropwizard.sharding.sharding;
 
-import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BalancedShardManagerTest {
 
-   @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testShardForBucket() throws Exception {
-        new BalancedShardManager(5);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(5));
     }
 
-   @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testShardForOddBucket() throws Exception {
-        new BalancedShardManager(9);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(9));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testShardForEvenNon2PowerBucket() throws Exception {
-        new BalancedShardManager(40);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new BalancedShardManager(40));
     }
 
     @Test
