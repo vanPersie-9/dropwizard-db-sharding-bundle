@@ -447,7 +447,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
             LockedContext<U> context,
             DetachedCriteria criteria,
             UnaryOperator<T> updater,
-            Supplier<T> entityGenerator) {
+            U parent,
+            Function<U, T> entityGenerator) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
 
         try {
@@ -469,7 +470,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                                                                           "can't be " +
                                                                                                           "null");
                                                                                           final T newEntity =
-                                                                                                  entityGenerator.get();
+                                                                                                  entityGenerator.apply(parent);
                                                                                           Preconditions.checkNotNull(
                                                                                                   newEntity,
                                                                                                   "Generated entity " +

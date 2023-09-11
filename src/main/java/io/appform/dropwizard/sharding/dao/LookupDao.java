@@ -142,6 +142,18 @@ public class LookupDao<T> implements ShardedDao<T> {
             return list(criteria.getExecutableCriteria(currentSession()));
         }
 
+        /**
+         * Run a query inside this shard and return the matching list.
+         *
+         * @param criteria selection criteria to be applied.
+         * @return List of elements or empty list if none found
+         */
+        @SuppressWarnings("rawtypes")
+        List run(DetachedCriteria criteria) {
+            return criteria.getExecutableCriteria(currentSession())
+                    .list();
+        }
+
         List<T> select(DetachedCriteria criteria, int start, int count) {
             val executableCriteria = criteria.getExecutableCriteria(currentSession());
             if (-1 != start) {
@@ -541,41 +553,6 @@ public class LookupDao<T> implements ShardedDao<T> {
                           "scrollUp");
     }
 
-    @SneakyThrows
-    private ScrollResult<T> scrollImpl(
-            final DetachedCriteria inCriteria,
-            final ScrollPointer pointer,
-            final int pageSize,
-            final UnaryOperator<DetachedCriteria> criteriaMutator,
-            final Comparator<ScrollResultItem<T>> comparator,
-            String methodName) {
-        val daoIndex = new AtomicInteger();
-        val results = daos.stream()
-                .flatMap(dao -> {
-                    val currIdx = daoIndex.getAndIncrement();
-                    val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
-                    return transactionExecutor.execute(dao.sessionFactory,
-                                                true,
-                                                queryCriteria -> dao.select(
-                                                        queryCriteria,
-                                                        pointer.getCurrOffset(currIdx),
-                                                        pageSize),
-                                                criteria, methodName, currIdx)
-                            .stream()
-                            .map(item -> new ScrollResultItem<>(item, currIdx));
-                })
-                .sorted(comparator)
-                .limit(pageSize)
-                .collect(Collectors.toList());
-        //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
-        val outputBuilder = ImmutableList.<T>builder();
-        results.forEach(result -> {
-            outputBuilder.add(result.getData());
-            pointer.advance(result.getShardIdx(), 1);// will get advanced
-        });
-        return new ScrollResult<>(pointer, outputBuilder.build());
-    }
-
     /**
      * Queries using the specified criteria across all shards and returns the counts of rows satisfying the criteria.
      * <b>Note:</b> This method runs the query serially
@@ -593,6 +570,38 @@ public class LookupDao<T> implements ShardedDao<T> {
                         throw new RuntimeException(e);
                     }
                 }).collect(Collectors.toList());
+    }
+
+    /**
+     * Run arbitrary read-only queries on all shards and return results.
+     * @param criteria The detached criteria. Typically, a grouping or counting query
+     * @return A map of shard vs result-list
+     */
+    @SuppressWarnings("rawtypes")
+    public Map<Integer, List> run(DetachedCriteria criteria) {
+        return run(criteria, Function.identity());
+    }
+
+    /**
+     * Run read-only queries on all shards and transform them into required types
+     * @param criteria The detached criteria. Typically, a grouping or counting query
+     * @param translator A method to transform results to required type
+     * @return Translated result
+     * @param <U> Return type
+     */
+    @SuppressWarnings("rawtypes")
+    public<U> U run(DetachedCriteria criteria, Function<Map<Integer, List>, U> translator) {
+        val output = IntStream.range(0, daos.size())
+                .boxed()
+                .collect(Collectors.toMap(Function.identity(), shardId -> {
+                    final LookupDaoPriv dao = daos.get(shardId);
+                    try {
+                        return transactionExecutor.execute(dao.sessionFactory, true, dao::run, criteria, "run", shardId);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }));
+        return translator.apply(output);
     }
 
     /**
@@ -755,4 +764,38 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
     }
 
+    @SneakyThrows
+    private ScrollResult<T> scrollImpl(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer pointer,
+            final int pageSize,
+            final UnaryOperator<DetachedCriteria> criteriaMutator,
+            final Comparator<ScrollResultItem<T>> comparator,
+            String methodName) {
+        val daoIndex = new AtomicInteger();
+        val results = daos.stream()
+                .flatMap(dao -> {
+                    val currIdx = daoIndex.getAndIncrement();
+                    val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       queryCriteria -> dao.select(
+                                                               queryCriteria,
+                                                               pointer.getCurrOffset(currIdx),
+                                                               pageSize),
+                                                       criteria, methodName, currIdx)
+                            .stream()
+                            .map(item -> new ScrollResultItem<>(item, currIdx));
+                })
+                .sorted(comparator)
+                .limit(pageSize)
+                .collect(Collectors.toList());
+        //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
+        val outputBuilder = ImmutableList.<T>builder();
+        results.forEach(result -> {
+            outputBuilder.add(result.getData());
+            pointer.advance(result.getShardIdx(), 1);// will get advanced
+        });
+        return new ScrollResult<>(pointer, outputBuilder.build());
+    }
 }

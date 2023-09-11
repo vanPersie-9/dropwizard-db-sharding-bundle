@@ -143,7 +143,22 @@ public class LockedContext<T> {
             Supplier<U> entityGenerator) {
         return apply(parent -> {
             try {
-                relationalDao.createOrUpdate(this, criteria, updater, entityGenerator);
+                relationalDao.createOrUpdate(this, criteria, updater, parent, p -> entityGenerator.get());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        });
+    }
+
+    public <U> LockedContext<T> createOrUpdate(
+            RelationalDao<U> relationalDao,
+            DetachedCriteria criteria,
+            UnaryOperator<U> updater,
+            Function<T, U> entityGenerator) {
+        return apply(parent -> {
+            try {
+                relationalDao.createOrUpdate(this, criteria, updater, parent, entityGenerator);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -154,7 +169,7 @@ public class LockedContext<T> {
     public <U> LockedContext<T> update(
             RelationalDao<U> relationalDao,
             DetachedCriteria criteria,
-            Function<U, U> updater,
+            UnaryOperator<U> updater,
             BooleanSupplier updateNext) {
         return apply(parent -> {
             try {
