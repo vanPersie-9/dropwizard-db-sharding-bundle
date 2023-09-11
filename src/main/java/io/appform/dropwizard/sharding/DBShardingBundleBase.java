@@ -17,6 +17,7 @@
 
 package io.appform.dropwizard.sharding;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -25,12 +26,19 @@ import io.appform.dropwizard.sharding.admin.BlacklistShardTask;
 import io.appform.dropwizard.sharding.admin.UnblacklistShardTask;
 import io.appform.dropwizard.sharding.caching.LookupCache;
 import io.appform.dropwizard.sharding.caching.RelationalCache;
+import io.appform.dropwizard.sharding.config.MetricConfig;
 import io.appform.dropwizard.sharding.config.ShardedHibernateFactory;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
-import io.appform.dropwizard.sharding.dao.*;
+import io.appform.dropwizard.sharding.dao.CacheableLookupDao;
+import io.appform.dropwizard.sharding.dao.CacheableRelationalDao;
+import io.appform.dropwizard.sharding.dao.LookupDao;
+import io.appform.dropwizard.sharding.dao.RelationalDao;
+import io.appform.dropwizard.sharding.dao.WrapperDao;
 import io.appform.dropwizard.sharding.filters.TransactionFilter;
 import io.appform.dropwizard.sharding.healthcheck.HealthCheckManager;
 import io.appform.dropwizard.sharding.listeners.TransactionListener;
+import io.appform.dropwizard.sharding.metrics.TransactionMetricManager;
+import io.appform.dropwizard.sharding.metrics.TransactionMetricObserver;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.observers.internal.FilteringObserver;
 import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
@@ -64,6 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -167,8 +176,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         environment.admin().addTask(new BlacklistShardTask(shardManager));
         environment.admin().addTask(new UnblacklistShardTask(shardManager));
         healthCheckManager.manageHealthChecks(getConfig(configuration).getBlacklist(), environment);
-
-        setupObservers();
+        setupObservers(configuration, environment.metrics());
     }
 
     public final void registerObserver(final TransactionObserver observer) {
@@ -226,6 +234,10 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
     }
 
     protected abstract ShardedHibernateFactory getConfig(T config);
+
+    protected Supplier<MetricConfig> getMetricConfig(T config) {
+        return () -> getConfig(config).getMetricConfig();
+    }
 
     protected ShardBlacklistingStore getBlacklistingStore() {
         return new InMemoryLocalShardBlacklistingStore();
@@ -364,7 +376,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                                                       new ConsistentHashBucketIdExtractor<>(this.shardManager)));
     }
 
-    private void setupObservers() {
+    private void setupObservers(final T config,
+                                final MetricRegistry metricRegistry) {
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
@@ -374,6 +387,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             }
             this.rootObserver = observer.setNext(rootObserver);
         }
+        rootObserver = new TransactionMetricObserver(new TransactionMetricManager(getMetricConfig(config),
+                metricRegistry)).setNext(rootObserver);
         rootObserver = new FilteringObserver(rootObserver).addFilters(filters);
 
         //Print the observer chain
