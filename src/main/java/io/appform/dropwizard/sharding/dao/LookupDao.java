@@ -92,7 +92,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         T getLockedForWrite(String lookupKey) {
-            return getLocked(lookupKey, LockMode.PESSIMISTIC_WRITE);
+            return getLocked(lookupKey, LockMode.UPGRADE_NOWAIT);
         }
 
         /**
