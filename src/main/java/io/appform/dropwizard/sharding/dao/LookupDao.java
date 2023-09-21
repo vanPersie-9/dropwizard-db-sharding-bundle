@@ -24,6 +24,7 @@ import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
@@ -131,9 +132,20 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @param criteria selection criteria to be applied.
          * @return List of elements or empty list if none found
          */
+        @Deprecated
         List<T> select(DetachedCriteria criteria) {
             return list(criteria.getExecutableCriteria(currentSession()));
         }
+
+        List<T> select(final QuerySpec<T> querySpec) {
+            val session = currentSession();
+            CriteriaBuilder builder = session.getCriteriaBuilder();
+            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
+            Root<T> root = criteria.from(entityClass);
+            querySpec.apply(root, criteria, builder);
+            return list(session.createQuery(criteria));
+        }
+
 
         long count(DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
@@ -384,6 +396,26 @@ public class LookupDao<T> implements ShardedDao<T> {
                     try {
                         val dao = daos.get(shardId);
                         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, criteria, "scatterGather",
+                                shardId);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    /**
+     * Queries using the specified criteria across all shards and returns the result.
+     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     *
+     * @param querySpec The select criteria
+     * @return List of elements or empty if none match
+     */
+    public List<T> scatterGather(QuerySpec<T> querySpec) {
+        return IntStream.range(0, daos.size())
+                .mapToObj(shardId -> {
+                    try {
+                        val dao = daos.get(shardId);
+                        return transactionExecutor.execute(dao.sessionFactory, true, dao::select, querySpec, "scatterGather",
                                 shardId);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
