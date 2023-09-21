@@ -102,7 +102,6 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T getLocked(String lookupKey, LockModeType lockMode) {
-            // TODO Figure out how to set lockMode correctly here
             val session = currentSession();
             CriteriaBuilder builder = session.getCriteriaBuilder();
             CriteriaQuery<T> criteria = builder.createQuery(entityClass);

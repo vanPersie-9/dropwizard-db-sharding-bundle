@@ -31,7 +31,6 @@ import lombok.val;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Criteria;
 import org.hibernate.LockMode;
-import org.hibernate.LockOptions;
 import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
@@ -85,22 +84,21 @@ public class RelationalDao<T> implements ShardedDao<T> {
 //        }
 
         T get(final Object lookupKey) {
-            // TODO Figure out how to set lockmode properly here
             val session = currentSession();
             val criteriaBuilder = session.getCriteriaBuilder();
             val query = criteriaBuilder.createQuery(entityClass);
             val root = query.from(entityClass);
             query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(query);
+            return uniqueResult(session.createQuery(query).setLockMode(LockModeType.NONE));
         }
 
         T getLockedForWrite(final QuerySpec<T> querySpec) {
-            // TODO Figure out how to set lockmode properly here
-            val criteriaBuilder = currentSession().getCriteriaBuilder();
+            val session = currentSession();
+            val criteriaBuilder = session.getCriteriaBuilder();
             val query = criteriaBuilder.createQuery(entityClass);
             val root = query.from(entityClass);
             querySpec.apply(root, query, criteriaBuilder);
-            return uniqueResult(query);
+            return uniqueResult(session.createQuery(query).setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
         @Deprecated
