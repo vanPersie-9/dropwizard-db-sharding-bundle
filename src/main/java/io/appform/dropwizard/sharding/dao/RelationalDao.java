@@ -31,6 +31,7 @@ import lombok.val;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Criteria;
 import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
@@ -41,6 +42,7 @@ import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
 import javax.persistence.Id;
+import javax.persistence.LockModeType;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
@@ -76,21 +78,19 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         T get(Object lookupKey) {
-            // TODO How to provide lockMode here
-            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
-            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
-            Root<T> root = query.from(entityClass);
+            val criteriaBuilder = currentSession().getCriteriaBuilder();
+            val query = criteriaBuilder.createQuery(entityClass);
+            val root = query.from(entityClass);
             query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(query);
+            return uniqueResult(currentSession().createQuery(query).setLockMode(LockModeType.READ));
         }
 
         T getLockedForWrite(QuerySpec<T> querySpec) {
-            // TODO How to provide lockMode here
-            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
-            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
-            Root<T> root = query.from(entityClass);
+            val criteriaBuilder = currentSession().getCriteriaBuilder();
+            val query = criteriaBuilder.createQuery(entityClass);
+            val root = query.from(entityClass);
             querySpec.apply(root, query, criteriaBuilder);
-            return uniqueResult(query);
+            return uniqueResult(currentSession().createQuery(query).setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
         @Deprecated

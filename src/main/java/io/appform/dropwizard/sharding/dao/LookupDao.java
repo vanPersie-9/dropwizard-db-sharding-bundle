@@ -43,6 +43,7 @@ import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
+import javax.persistence.LockModeType;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
@@ -91,7 +92,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         T getLockedForWrite(String lookupKey) {
-            return getLocked(lookupKey, LockMode.UPGRADE_NOWAIT);
+            return getLocked(lookupKey, LockMode.PESSIMISTIC_WRITE);
         }
 
         /**
@@ -100,13 +101,20 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @param lookupKey Id of the object
          * @return Extracted element or null if not found.
          */
-        T getLocked(String lookupKey, LockMode lockMode) {
-            // TODO How to set lockmode here ????
-            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+        T getLocked(String lookupKey, LockModeType lockMode) {
+            val session = currentSession();
+            CriteriaBuilder criteriaBuilder = session.getCriteriaBuilder();
             CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
             Root<T> root = query.from(entityClass);
             query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(query);
+            return uniqueResult(session.createQuery(query).setLockMode(lockMode));
+        }
+
+        T getLocked(String lookupKey, LockMode lockMode){
+            return uniqueResult(currentSession()
+                    .createCriteria(entityClass)
+                    .add(Restrictions.eq(keyField.getName(), lookupKey))
+                    .setLockMode(lockMode));
         }
 
         /**
@@ -144,7 +152,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * Delete an object
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, LockMode.UPGRADE_NOWAIT))
+            return Optional.ofNullable(getLocked(id, LockModeType.PESSIMISTIC_WRITE))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
@@ -338,7 +346,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockMode.NONE),
+                key -> dao.getLocked(key, LockModeType.NONE),
                 null,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
@@ -350,7 +358,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockMode.NONE),
+                key -> dao.getLocked(key, LockModeType.NONE),
                 entityPopulator,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
