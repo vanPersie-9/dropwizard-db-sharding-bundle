@@ -137,7 +137,7 @@ public class LookupDao<T> implements ShardedDao<T> {
             return list(criteria.getExecutableCriteria(currentSession()));
         }
 
-        List<T> select(final QuerySpec<T> querySpec) {
+        List<T> select(final QuerySpec<T, T> querySpec) {
             val session = currentSession();
             CriteriaBuilder builder = session.getCriteriaBuilder();
             CriteriaQuery<T> criteria = builder.createQuery(entityClass);
@@ -339,14 +339,14 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
     }
 
-    public LockedContext<T> lockAndGetExecutor(String id) {
+    public LockedContext<T> lockAndGetExecutor(final String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id),
                 entityClass, shardInfoProvider, observer);
     }
 
-    public ReadOnlyContext<T> readOnlyExecutor(String id) {
+    public ReadOnlyContext<T> readOnlyExecutor(final String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
@@ -358,7 +358,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 shardInfoProvider, entityClass, observer);
     }
 
-    public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
+    public ReadOnlyContext<T> readOnlyExecutor(final String id,
+                                               final Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
@@ -390,6 +391,7 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @param criteria The selct criteria
      * @return List of elements or empty if none match
      */
+    @Deprecated
     public List<T> scatterGather(DetachedCriteria criteria) {
         return IntStream.range(0, daos.size())
                 .mapToObj(shardId -> {
@@ -410,7 +412,7 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @param querySpec The select criteria
      * @return List of elements or empty if none match
      */
-    public List<T> scatterGather(QuerySpec<T> querySpec) {
+    public List<T> scatterGather(final QuerySpec<T, T> querySpec) {
         return IntStream.range(0, daos.size())
                 .mapToObj(shardId -> {
                     try {
@@ -529,6 +531,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
 
+        @Deprecated
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -536,6 +539,14 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, 0, 1, consumer, p -> true);
         }
 
+        public <U> ReadOnlyContext<T> readOneAugmentParent(
+                RelationalDao<U> relationalDao,
+                QuerySpec<U, U> querySpec,
+                BiConsumer<T, List<U>> consumer) {
+            return readAugmentParent(relationalDao, querySpec, 0, 1, consumer, p -> true);
+        }
+
+        @Deprecated
         public <U> ReadOnlyContext<T> readAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -545,6 +556,16 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, first, numResults, consumer, p -> true);
         }
 
+        public <U> ReadOnlyContext<T> readAugmentParent(
+                RelationalDao<U> relationalDao,
+                QuerySpec<U, U> querySpec,
+                int first,
+                int numResults,
+                BiConsumer<T, List<U>> consumer) {
+            return readAugmentParent(relationalDao, querySpec, first, numResults, consumer, p -> true);
+        }
+
+        @Deprecated
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -553,6 +574,16 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, 0, 1, consumer, filter);
         }
 
+        public <U> ReadOnlyContext<T> readOneAugmentParent(
+                RelationalDao<U> relationalDao,
+                QuerySpec<U, U> querySpec,
+                BiConsumer<T, List<U>> consumer,
+                Predicate<T> filter) {
+            return readAugmentParent(relationalDao, querySpec, 0, 1, consumer, filter);
+        }
+
+
+        @Deprecated
         public <U> ReadOnlyContext<T> readAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -564,6 +595,25 @@ public class LookupDao<T> implements ShardedDao<T> {
                 if (filter.test(parent)) {
                     try {
                         consumer.accept(parent, relationalDao.select(this, criteria, first, numResults));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                return null;
+            });
+        }
+
+        public <U> ReadOnlyContext<T> readAugmentParent(
+                RelationalDao<U> relationalDao,
+                QuerySpec<U, U> querySpec,
+                int first,
+                int numResults,
+                BiConsumer<T, List<U>> consumer,
+                Predicate<T> filter) {
+            return apply(parent -> {
+                if (filter.test(parent)) {
+                    try {
+                        consumer.accept(parent, relationalDao.select(this, querySpec, first, numResults));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }

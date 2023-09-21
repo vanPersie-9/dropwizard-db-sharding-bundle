@@ -22,6 +22,7 @@ import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.query.QuerySpec;
+import io.appform.dropwizard.sharding.query.QueryUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
@@ -37,7 +38,6 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Projections;
-import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
 import javax.persistence.Id;
@@ -77,21 +77,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         T get(final Object lookupKey) {
-            val session = currentSession();
-            val criteriaBuilder = session.getCriteriaBuilder();
-            val query = criteriaBuilder.createQuery(entityClass);
-            val root = query.from(entityClass);
-            query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(session.createQuery(query).setLockMode(LockModeType.NONE));
+            val q = QueryUtils.createQuery(currentSession(),
+                    entityClass,
+                    (queryRoot, query, criteriaBuilder) ->
+                            query.where(criteriaBuilder.equal(queryRoot.get(keyField.getName()), lookupKey)));
+            return uniqueResult(q.setLockMode(LockModeType.NONE));
         }
 
-        T getLockedForWrite(final QuerySpec<T> querySpec) {
-            val session = currentSession();
-            val criteriaBuilder = session.getCriteriaBuilder();
-            val query = criteriaBuilder.createQuery(entityClass);
-            val root = query.from(entityClass);
-            querySpec.apply(root, query, criteriaBuilder);
-            return uniqueResult(session.createQuery(query).setLockMode(LockModeType.PESSIMISTIC_WRITE));
+        T getLockedForWrite(final QuerySpec<T, T> querySpec) {
+            val q = QueryUtils.createQuery(currentSession(), entityClass, querySpec);
+            return uniqueResult(q.setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
         @Deprecated
@@ -116,22 +111,42 @@ public class RelationalDao<T> implements ShardedDao<T> {
             currentSession().update(entity);
         }
 
-        List<T> select(SelectParamPriv selectParam) {
-            val criteria = selectParam.criteria.getExecutableCriteria(currentSession());
-            criteria.setFirstResult(selectParam.start);
-            criteria.setMaxResults(selectParam.numRows);
-            return list(criteria);
+        List<T> select(SelectParamPriv<T> selectParam) {
+            if (selectParam.criteria != null) {
+                val criteria = selectParam.criteria.getExecutableCriteria(currentSession());
+                criteria.setFirstResult(selectParam.start);
+                criteria.setMaxResults(selectParam.numRows);
+                return list(criteria);
+            }
+            return list(QueryUtils.createQuery(currentSession(), entityClass, selectParam.querySpec));
         }
 
-        ScrollableResults scroll(ScrollParamPriv scrollDetails) {
-            final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
-            return criteria.scroll(ScrollMode.FORWARD_ONLY);
+        ScrollableResults scroll(ScrollParamPriv<T> scrollDetails) {
+            if (scrollDetails.getCriteria() != null) {
+                final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
+                return criteria.scroll(ScrollMode.FORWARD_ONLY);
+            }
+
+            return QueryUtils.createQuery(currentSession(), entityClass, scrollDetails.querySpec)
+                    .scroll(ScrollMode.FORWARD_ONLY);
         }
 
-        long count(DetachedCriteria criteria) {
+        @Deprecated
+        long count(final DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
                     .setProjection(Projections.rowCount())
                     .uniqueResult();
+        }
+
+        long count(final QuerySpec<T, Long> querySpec) {
+            val session = currentSession();
+            CriteriaBuilder criteriaBuilder = session.getCriteriaBuilder();
+            CriteriaQuery<Long> criteriaQuery = criteriaBuilder.createQuery(Long.class);
+            Root<T> root = criteriaQuery.from(entityClass);
+            criteriaQuery.select(criteriaBuilder.count(root));
+            querySpec.apply(root, criteriaQuery, criteriaBuilder);
+            Query<Long> query = session.createQuery(criteriaQuery);
+            return query.getSingleResult();
         }
 
         public int update(final UpdateOperationMeta updateOperationMeta) {
@@ -143,16 +158,19 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     @Builder
-    private static class SelectParamPriv {
+    private static class SelectParamPriv<T> {
         DetachedCriteria criteria;
+        QuerySpec<T, T> querySpec;
         int start;
         int numRows;
     }
 
     @Builder
-    private static class ScrollParamPriv {
+    private static class ScrollParamPriv<T> {
         @Getter
         private DetachedCriteria criteria;
+        @Getter
+        private QuerySpec<T, T> querySpec;
     }
 
     private List<RelationalDaoPriv> daos;
@@ -280,10 +298,23 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
+
+    @Deprecated
     <U> List<T> select(LookupDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int first, int numResults) throws Exception {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
-        SelectParamPriv selectParam = SelectParamPriv.builder()
+        SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .criteria(criteria)
+                .start(first)
+                .numRows(numResults)
+                .build();
+        return transactionExecutor.execute(context.getSessionFactory(), true, dao::select, selectParam, t -> t, false,
+                "select", context.getShardId());
+    }
+
+    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int first, int numResults) {
+        final RelationalDaoPriv dao = daos.get(context.getShardId());
+        SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
+                .querySpec(querySpec)
                 .start(first)
                 .numRows(numResults)
                 .build();
@@ -373,7 +404,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
-    public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T> querySpec) {
+    public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T, T> querySpec) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(querySpec),
@@ -463,7 +494,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public <U> U select(String parentKey, DetachedCriteria criteria, int first, int numResults, Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        SelectParamPriv selectParam = SelectParamPriv.<T>builder()
+        SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .criteria(criteria)
                 .start(first)
                 .numRows(numResults)
@@ -512,7 +543,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 .mapToObj(shardId -> {
                     val dao = daos.get(shardId);
                     try {
-                        SelectParamPriv selectParam = SelectParamPriv.<T>builder()
+                        SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                                 .criteria(criteria)
                                 .start(start)
                                 .numRows(numRows)
