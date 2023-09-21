@@ -172,6 +172,7 @@ public class LockedContext<T> {
         });
     }
 
+    @Deprecated
     public <U> LockedContext<T> update(
             RelationalDao<U> relationalDao,
             DetachedCriteria criteria,
@@ -186,6 +187,23 @@ public class LockedContext<T> {
             return null;
         });
     }
+
+
+    public <U> LockedContext<T> update(
+            RelationalDao<U> relationalDao,
+            QuerySpec<U, U> criteria,
+            Function<U, U> updater,
+            BooleanSupplier updateNext) {
+        return apply(parent -> {
+            try {
+                relationalDao.update(this, criteria, updater, updateNext);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        });
+    }
+
 
     public LockedContext<T> filter(Predicate<T> predicate) {
         return filter(predicate, new IllegalArgumentException("Predicate check failed"));

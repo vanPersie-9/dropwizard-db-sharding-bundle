@@ -30,26 +30,35 @@ import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import lombok.val;
+import org.apache.commons.lang3.RandomUtils;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class RelationalDaoTest {
 
-    private List<SessionFactory> sessionFactories = Lists.newArrayList();
+    private final List<SessionFactory> sessionFactories = Lists.newArrayList();
     private RelationalDao<RelationalEntity> relationalDao;
+
+    private ShardManager shardManager;
+    private ShardCalculator<String> shardCalculator;
 
     private SessionFactory buildSessionFactory(String dbName) {
         Configuration configuration = new Configuration();
@@ -74,12 +83,12 @@ public class RelationalDaoTest {
         for (int i = 0; i < 16; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
         }
-        final ShardManager shardManager = new BalancedShardManager(sessionFactories.size());
+        this.shardManager = new BalancedShardManager(sessionFactories.size());
+        this.shardCalculator = new ShardCalculator<>(shardManager, new ConsistentHashBucketIdExtractor<>(shardManager));
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         relationalDao = new RelationalDao<>(sessionFactories,
                 RelationalEntity.class,
-                new ShardCalculator<>(shardManager,
-                        new ConsistentHashBucketIdExtractor<>(shardManager)),
+                this.shardCalculator,
                 shardInfoProvider,
                 new EntityClassThreadLocalObserver(
                         new DaoClassLocalObserver(
@@ -222,5 +231,88 @@ public class RelationalDaoTest {
         MDC.clear();
         relationalDao.save(relationalKey, entityOne);
         InterceptorTestUtil.validateThreadLocal(RelationalDao.class, RelationalEntity.class);
+    }
+
+    @Test
+    public void testPersistenceAndQueryOnSameShard() throws Exception {
+        val numOfRecords = 100;
+        val relationalKeys = generateIdsInSameShard(numOfRecords);
+        for (String relationalKey : relationalKeys) {
+            relationalDao.save(relationalKey, RelationalEntity.builder()
+                    .key(relationalKey)
+                    .keyTwo(relationalKey)
+                    .value(UUID.randomUUID().toString())
+                    .build());
+        }
+
+        /* Test that the same shard has all the records by selecting any key at random and using it to fetch all
+         records */
+
+        val randomRelationalKey = relationalKeys.get(RandomUtils.nextInt(0, relationalKeys.size()));
+        long count = relationalDao.count(randomRelationalKey, (queryRoot, query, criteriaBuilder) -> {
+        });
+        Assertions.assertEquals(numOfRecords, count);
+
+        /*
+        Basic filter test to check equality constraint through QuerySpec
+         */
+        List<RelationalEntity> queryResultOne = relationalDao.select(randomRelationalKey,
+                (queryRoot, query, criteriaBuilder)
+                        -> query.where(criteriaBuilder.equal(queryRoot.get("keyTwo"), randomRelationalKey)), 0, numOfRecords);
+        Assertions.assertEquals(1, queryResultOne.size());
+
+        /*
+        Basic filter test to check in-equality constraint through QuerySpec
+         */
+        List<RelationalEntity> queryResultTwo = relationalDao.select(randomRelationalKey,
+                (queryRoot, query, criteriaBuilder)
+                        -> query.where(criteriaBuilder.notEqual(queryRoot.get("keyTwo"), randomRelationalKey)), 0, numOfRecords);
+        Assertions.assertEquals(numOfRecords - 1, queryResultTwo.size());
+
+        /*
+        Basic filter test to check multiple predicates through QuerySpec
+         */
+        List<RelationalEntity> queryResultThree = relationalDao.select(randomRelationalKey,
+                (queryRoot, query, criteriaBuilder) ->
+                        query.where(
+                                criteriaBuilder.and(
+                                        criteriaBuilder.equal(queryRoot.get("key"), randomRelationalKey),
+                                        criteriaBuilder.notEqual(queryRoot.get("keyTwo"), randomRelationalKey)
+                                )
+                        ), 0, numOfRecords);
+        Assertions.assertEquals(0, queryResultThree.size());
+    }
+
+
+    private List<String> generateIdsInSameShard(final int numIdsToBeGenerated) {
+        int expectedShardIndex = RandomUtils.nextInt(0, sessionFactories.size());
+        return generateIdsInSameShard(expectedShardIndex, numIdsToBeGenerated);
+    }
+
+    private List<List<String>> generateIdsInDifferentShard(int numIdsToBeGenerated) {
+        List<Integer> allowedIndexes = new ArrayList<>();
+        for (int i = 0; i < sessionFactories.size(); i++) {
+            allowedIndexes.add(i);
+        }
+        Collections.shuffle(allowedIndexes);
+        int expectedShardIndexOne = allowedIndexes.get(0);
+        int expectedShardIndexTwo = allowedIndexes.get(1);
+        return Lists.newArrayList(
+                generateIdsInSameShard(expectedShardIndexOne, numIdsToBeGenerated),
+                generateIdsInSameShard(expectedShardIndexTwo, numIdsToBeGenerated)
+        );
+    }
+
+    private List<String> generateIdsInSameShard(int expectedShardIndex, int numIdsToBeGenerated) {
+        return IntStream.range(0, numIdsToBeGenerated)
+                .mapToObj(value -> {
+                    while (true) {
+                        String id = UUID.randomUUID().toString();
+                        if (shardCalculator.shardId(id) == expectedShardIndex) {
+                            return id;
+                        }
+                    }
+                })
+                .collect(Collectors.toList());
     }
 }
