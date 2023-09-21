@@ -152,7 +152,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * Delete an object
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, LockModeType.PESSIMISTIC_WRITE))
+            return Optional.ofNullable(getLocked(id, LockMode.UPGRADE_NOWAIT))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
