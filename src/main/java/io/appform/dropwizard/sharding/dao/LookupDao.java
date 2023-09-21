@@ -346,7 +346,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockModeType.NONE),
+                key -> dao.getLocked(key, LockMode.NONE),
                 null,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
@@ -358,7 +358,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockModeType.NONE),
+                key -> dao.getLocked(key, LockMode.NONE),
                 entityPopulator,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
