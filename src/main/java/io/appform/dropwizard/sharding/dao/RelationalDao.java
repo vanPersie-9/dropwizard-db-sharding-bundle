@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
@@ -40,6 +41,9 @@ import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
 import javax.persistence.Id;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Root;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
@@ -72,12 +76,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         T get(Object lookupKey) {
-            return uniqueResult(currentSession()
-                    .createCriteria(entityClass)
-                    .add(Restrictions.eq(keyField.getName(), lookupKey))
-                    .setLockMode(LockMode.READ));
+            // TODO How to provide lockMode here
+            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
+            Root<T> root = query.from(entityClass);
+            query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
+            return uniqueResult(query);
         }
 
+        T getLockedForWrite(QuerySpec<T> querySpec) {
+            // TODO How to provide lockMode here
+            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
+            Root<T> root = query.from(entityClass);
+            querySpec.apply(root, query, criteriaBuilder);
+            return uniqueResult(query);
+        }
+
+        @Deprecated
         T getLockedForWrite(DetachedCriteria criteria) {
             return uniqueResult(criteria.getExecutableCriteria(currentSession())
                     .setLockMode(LockMode.UPGRADE_NOWAIT));
@@ -348,12 +364,21 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 "updateUsingQuery", lockedContext.getShardId());
     }
 
+    @Deprecated
     public LockedContext<T> lockAndGetExecutor(String parentKey, DetachedCriteria criteria) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria),
                 entityClass, shardInfoProvider, observer);
     }
+
+    public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T> querySpec) {
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
+        return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(querySpec),
+                entityClass, shardInfoProvider, observer);
+    }
+
 
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
         int shardId = shardCalculator.shardId(parentKey);

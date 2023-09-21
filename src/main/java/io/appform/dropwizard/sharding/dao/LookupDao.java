@@ -43,6 +43,9 @@ import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Root;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
@@ -98,10 +101,12 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T getLocked(String lookupKey, LockMode lockMode) {
-            return uniqueResult(currentSession()
-                    .createCriteria(entityClass)
-                    .add(Restrictions.eq(keyField.getName(), lookupKey))
-                    .setLockMode(lockMode));
+            // TODO How to set lockmode here ????
+            CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
+            Root<T> root = query.from(entityClass);
+            query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
+            return uniqueResult(query);
         }
 
         /**

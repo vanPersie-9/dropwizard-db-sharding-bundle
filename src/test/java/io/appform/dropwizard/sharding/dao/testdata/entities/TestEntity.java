@@ -24,7 +24,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -32,6 +31,7 @@ import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
+import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 
 @Entity
@@ -46,6 +46,7 @@ import javax.validation.constraints.NotNull;
         @NamedQuery(name = "testTextUpdateQuery", query = "update TestEntity set text = :text where externalId =:externalId")})
 
 public class TestEntity {
+
     @Id
     @NotNull
     @NotEmpty
