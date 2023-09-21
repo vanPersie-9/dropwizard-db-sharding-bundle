@@ -28,6 +28,7 @@ import io.appform.dropwizard.sharding.dao.RelationalDao;
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
 import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalObserver;
 import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
@@ -44,6 +45,9 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Root;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -504,6 +508,48 @@ public class LockTest {
         LockedContext<SomeOtherObject> contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
                 DetachedCriteria.forClass(SomeOtherObject.class)
                         .add(Restrictions.eq("myId", someOtherObject.getMyId())));
+        contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
+        contextUpdate.execute();
+
+        // get
+        Optional<SomeOtherObject> resp = relationDao.get(someOtherObject.getMyId(), 1L);
+        assertNotNull(resp.get());
+        assertEquals("UPDATE", resp.get().getValue());
+        Optional<SomeOtherObject> resp1 = relationDao.get(someOtherObject.getMyId(), 2L);
+        assertNotNull(resp1.get());
+    }
+
+    @Test
+    public void testLockingSampleWithQuerySpec() throws Exception {
+        SomeOtherObject someOtherObject = SomeOtherObject.builder()
+                .myId("11")
+                .value("Hello")
+                .build();
+
+        SomeOtherObject someOtherObject2 = SomeOtherObject.builder()
+                .myId("12")
+                .value("Hello")
+                .build();
+        SomeOtherObject someOtherObject3 = SomeOtherObject.builder()
+                .myId("12")
+                .value("Hello")
+                .build();
+
+        // save
+        LockedContext<SomeOtherObject> context = relationDao.saveAndGetExecutor(someOtherObject.getMyId(), someOtherObject);
+        context.save(relationDao, parent -> {
+            someOtherObject2.setMyId(String.valueOf(parent.getId()));
+            return someOtherObject2;
+        });
+        context.save(relationDao, parent -> {
+            someOtherObject3.setMyId(String.valueOf(parent.getId()));
+            return someOtherObject3;
+        });
+        context.execute();
+
+        // update
+        val contextUpdate = relationDao.lockAndGetExecutor(someOtherObject.getMyId(),
+                (queryRoot, query, criteriaBuilder) -> query.where(criteriaBuilder.equal(queryRoot.get("myId"), someOtherObject.getMyId())));
         contextUpdate.mutate(parent -> parent.setValue("UPDATE"));
         contextUpdate.execute();
 
