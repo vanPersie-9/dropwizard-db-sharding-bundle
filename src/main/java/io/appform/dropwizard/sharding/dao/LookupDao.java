@@ -88,7 +88,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T get(String lookupKey) {
-            return getLocked(lookupKey, LockModeType.READ);
+            return getLocked(lookupKey, LockModeType.NONE);
         }
 
         T getLockedForWrite(String lookupKey) {
@@ -104,18 +104,11 @@ public class LookupDao<T> implements ShardedDao<T> {
         T getLocked(String lookupKey, LockModeType lockMode) {
             // TODO Figure out how to set lockMode correctly here
             val session = currentSession();
-            CriteriaBuilder criteriaBuilder = session.getCriteriaBuilder();
-            CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
-            Root<T> root = query.from(entityClass);
-            query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(query);
-        }
-
-        T getLocked(String lookupKey, LockMode lockMode) {
-            return uniqueResult(currentSession()
-                    .createCriteria(entityClass)
-                    .add(Restrictions.eq(keyField.getName(), lookupKey))
-                    .setLockMode(lockMode));
+            CriteriaBuilder builder = session.getCriteriaBuilder();
+            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
+            Root<T> root = criteria.from(entityClass);
+            criteria.where(builder.equal(root.get(keyField.getName()), lookupKey));
+            return uniqueResult(session.createQuery(criteria).setLockMode(lockMode));
         }
 
         /**
