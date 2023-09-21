@@ -76,13 +76,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
             this.sessionFactory = sessionFactory;
         }
 
-//        T get(Object lookupKey) {
-//            return uniqueResult(currentSession()
-//                    .createCriteria(entityClass)
-//                    .add(Restrictions.eq(keyField.getName(), lookupKey))
-//                    .setLockMode(LockMode.READ));
-//        }
-
         T get(final Object lookupKey) {
             val session = currentSession();
             val criteriaBuilder = session.getCriteriaBuilder();
