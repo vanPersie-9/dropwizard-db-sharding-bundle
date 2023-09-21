@@ -77,20 +77,30 @@ public class RelationalDao<T> implements ShardedDao<T> {
             this.sessionFactory = sessionFactory;
         }
 
-        T get(Object lookupKey) {
-            val criteriaBuilder = currentSession().getCriteriaBuilder();
+//        T get(Object lookupKey) {
+//            return uniqueResult(currentSession()
+//                    .createCriteria(entityClass)
+//                    .add(Restrictions.eq(keyField.getName(), lookupKey))
+//                    .setLockMode(LockMode.READ));
+//        }
+
+        T get(final Object lookupKey) {
+            // TODO Figure out how to set lockmode properly here
+            val session = currentSession();
+            val criteriaBuilder = session.getCriteriaBuilder();
             val query = criteriaBuilder.createQuery(entityClass);
             val root = query.from(entityClass);
             query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(currentSession().createQuery(query).setLockMode(LockModeType.READ));
+            return uniqueResult(query);
         }
 
-        T getLockedForWrite(QuerySpec<T> querySpec) {
+        T getLockedForWrite(final QuerySpec<T> querySpec) {
+            // TODO Figure out how to set lockmode properly here
             val criteriaBuilder = currentSession().getCriteriaBuilder();
             val query = criteriaBuilder.createQuery(entityClass);
             val root = query.from(entityClass);
             querySpec.apply(root, query, criteriaBuilder);
-            return uniqueResult(currentSession().createQuery(query).setLockMode(LockModeType.PESSIMISTIC_WRITE));
+            return uniqueResult(query);
         }
 
         @Deprecated

@@ -88,11 +88,11 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T get(String lookupKey) {
-            return getLocked(lookupKey, LockMode.READ);
+            return getLocked(lookupKey, LockModeType.READ);
         }
 
         T getLockedForWrite(String lookupKey) {
-            return getLocked(lookupKey, LockMode.UPGRADE_NOWAIT);
+            return getLocked(lookupKey, LockModeType.PESSIMISTIC_WRITE);
         }
 
         /**
@@ -102,15 +102,16 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return Extracted element or null if not found.
          */
         T getLocked(String lookupKey, LockModeType lockMode) {
+            // TODO Figure out how to set lockMode correctly here
             val session = currentSession();
             CriteriaBuilder criteriaBuilder = session.getCriteriaBuilder();
             CriteriaQuery<T> query = criteriaBuilder.createQuery(entityClass);
             Root<T> root = query.from(entityClass);
             query.where(criteriaBuilder.equal(root.get(keyField.getName()), lookupKey));
-            return uniqueResult(session.createQuery(query).setLockMode(lockMode));
+            return uniqueResult(query);
         }
 
-        T getLocked(String lookupKey, LockMode lockMode){
+        T getLocked(String lookupKey, LockMode lockMode) {
             return uniqueResult(currentSession()
                     .createCriteria(entityClass)
                     .add(Restrictions.eq(keyField.getName(), lookupKey))
@@ -152,7 +153,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * Delete an object
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, LockMode.UPGRADE_NOWAIT))
+            return Optional.ofNullable(getLocked(id, LockModeType.PESSIMISTIC_WRITE))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
@@ -346,7 +347,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockMode.NONE),
+                key -> dao.getLocked(key, LockModeType.NONE),
                 null,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
@@ -358,7 +359,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                key -> dao.getLocked(key, LockMode.NONE),
+                key -> dao.getLocked(key, LockModeType.NONE),
                 entityPopulator,
                 id,
                 shardingOptions.isSkipReadOnlyTransaction(),
