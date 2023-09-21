@@ -4,6 +4,7 @@ import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import lombok.Getter;
 import org.hibernate.SessionFactory;
@@ -139,6 +140,7 @@ public class LockedContext<T> {
         });
     }
 
+    @Deprecated
     public <U> LockedContext<T> createOrUpdate(
             RelationalDao<U> relationalDao,
             DetachedCriteria criteria,
@@ -147,6 +149,22 @@ public class LockedContext<T> {
         return apply(parent -> {
             try {
                 relationalDao.createOrUpdate(this, criteria, updater, entityGenerator);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        });
+    }
+
+
+    public <U> LockedContext<T> createOrUpdate(
+            RelationalDao<U> relationalDao,
+            QuerySpec<U, U> querySpec,
+            Function<U, U> updater,
+            Supplier<U> entityGenerator) {
+        return apply(parent -> {
+            try {
+                relationalDao.createOrUpdate(this, querySpec, updater, entityGenerator);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
