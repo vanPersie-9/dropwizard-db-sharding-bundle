@@ -118,7 +118,10 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 criteria.setMaxResults(selectParam.numRows);
                 return list(criteria);
             }
-            return list(QueryUtils.createQuery(currentSession(), entityClass, selectParam.querySpec));
+            val query  = QueryUtils.createQuery(currentSession(), entityClass, selectParam.querySpec);
+            query.setFirstResult(selectParam.start);
+            query.setMaxResults(selectParam.numRows);
+            return list(query);
         }
 
         ScrollableResults scroll(ScrollParamPriv<T> scrollDetails) {
@@ -126,7 +129,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
                 return criteria.scroll(ScrollMode.FORWARD_ONLY);
             }
-
             return QueryUtils.createQuery(currentSession(), entityClass, scrollDetails.querySpec)
                     .scroll(ScrollMode.FORWARD_ONLY);
         }

@@ -146,6 +146,18 @@ public class LookupDao<T> implements ShardedDao<T> {
             return list(session.createQuery(criteria));
         }
 
+        List<T> select(final QuerySpec<T, T> querySpec, int start, int numRows) {
+            val session = currentSession();
+            CriteriaBuilder builder = session.getCriteriaBuilder();
+            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
+            Root<T> root = criteria.from(entityClass);
+            querySpec.apply(root, criteria, builder);
+            val query = session.createQuery(criteria)
+                    .setFirstResult(start)
+                    .setMaxResults(numRows);
+            return list(query);
+        }
+
 
         long count(DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
@@ -418,6 +430,26 @@ public class LookupDao<T> implements ShardedDao<T> {
                     try {
                         val dao = daos.get(shardId);
                         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, querySpec, "scatterGather",
+                                shardId);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    /**
+     * Queries using the specified criteria across all shards and returns the result.
+     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     *
+     * @param querySpec The select criteria
+     * @return List of elements or empty if none match
+     */
+    public List<T> scatterGather(final QuerySpec<T, T> querySpec, int start, int numRows) {
+        return IntStream.range(0, daos.size())
+                .mapToObj(shardId -> {
+                    try {
+                        val dao = daos.get(shardId);
+                        return transactionExecutor.execute(dao.sessionFactory, true, spec -> dao.select(spec, start, numRows), querySpec, "scatterGather",
                                 shardId);
                     } catch (Exception e) {
                         throw new RuntimeException(e);

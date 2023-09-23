@@ -7,5 +7,4 @@ import javax.persistence.criteria.Root;
 public interface QuerySpec<T, U> {
 
     void apply(Root<T> queryRoot, CriteriaQuery<U> query, CriteriaBuilder criteriaBuilder);
-
 }
