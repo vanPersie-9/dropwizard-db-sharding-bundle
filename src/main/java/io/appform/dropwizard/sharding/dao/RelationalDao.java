@@ -22,7 +22,6 @@ import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.query.QuerySpec;
-import io.appform.dropwizard.sharding.query.QueryUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Builder;
@@ -77,7 +76,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         T get(final Object lookupKey) {
-            val q = QueryUtils.createQuery(currentSession(),
+            val q = createQuery(currentSession(),
                     entityClass,
                     (queryRoot, query, criteriaBuilder) ->
                             query.where(criteriaBuilder.equal(queryRoot.get(keyField.getName()), lookupKey)));
@@ -85,7 +84,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         T getLockedForWrite(final QuerySpec<T, T> querySpec) {
-            val q = QueryUtils.createQuery(currentSession(), entityClass, querySpec);
+            val q = createQuery(currentSession(), entityClass, querySpec);
             return uniqueResult(q.setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
@@ -118,7 +117,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 criteria.setMaxResults(selectParam.numRows);
                 return list(criteria);
             }
-            val query  = QueryUtils.createQuery(currentSession(), entityClass, selectParam.querySpec);
+            val query = createQuery(currentSession(), entityClass, selectParam.querySpec);
             query.setFirstResult(selectParam.start);
             query.setMaxResults(selectParam.numRows);
             return list(query);
@@ -129,7 +128,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
                 return criteria.scroll(ScrollMode.FORWARD_ONLY);
             }
-            return QueryUtils.createQuery(currentSession(), entityClass, scrollDetails.querySpec)
+            return createQuery(currentSession(), entityClass, scrollDetails.querySpec)
                     .scroll(ScrollMode.FORWARD_ONLY);
         }
 
@@ -745,6 +744,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     protected Field getKeyField() {
         return this.keyField;
+    }
+
+    private <T> Query<T> createQuery(final Session session,
+                                     final Class<T> entityClass,
+                                     final QuerySpec<T, T> querySpec) {
+        CriteriaBuilder builder = session.getCriteriaBuilder();
+        CriteriaQuery<T> criteria = builder.createQuery(entityClass);
+        Root<T> root = criteria.from(entityClass);
+        querySpec.apply(root, criteria, builder);
+        return session.createQuery(criteria);
     }
 
 }
