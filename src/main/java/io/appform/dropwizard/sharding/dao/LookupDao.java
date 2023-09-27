@@ -36,7 +36,6 @@ import lombok.val;
 import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
@@ -45,9 +44,6 @@ import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
 import javax.persistence.LockModeType;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Root;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
@@ -59,6 +55,8 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static io.appform.dropwizard.sharding.query.QueryUtils.equalityFilter;
 
 /**
  * A dao to manage lookup and top level elements in the system. Can save and retrieve an object (tree) from any shard.
@@ -104,10 +102,10 @@ public class LookupDao<T> implements ShardedDao<T> {
          */
         T getLocked(String lookupKey, LockModeType lockMode) {
             val session = currentSession();
-            CriteriaBuilder builder = session.getCriteriaBuilder();
-            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
-            Root<T> root = criteria.from(entityClass);
-            criteria.where(builder.equal(root.get(keyField.getName()), lookupKey));
+            val builder = session.getCriteriaBuilder();
+            val criteria = builder.createQuery(entityClass);
+            val root = criteria.from(entityClass);
+            criteria.where(equalityFilter(builder, root, keyField.getName(), lookupKey));
             return uniqueResult(session.createQuery(criteria).setLockMode(lockMode));
         }
 
@@ -139,25 +137,12 @@ public class LookupDao<T> implements ShardedDao<T> {
 
         List<T> select(final QuerySpec<T, T> querySpec) {
             val session = currentSession();
-            CriteriaBuilder builder = session.getCriteriaBuilder();
-            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
-            Root<T> root = criteria.from(entityClass);
+            val builder = session.getCriteriaBuilder();
+            val criteria = builder.createQuery(entityClass);
+            val root = criteria.from(entityClass);
             querySpec.apply(root, criteria, builder);
             return list(session.createQuery(criteria));
         }
-
-        List<T> select(final QuerySpec<T, T> querySpec, int start, int numRows) {
-            val session = currentSession();
-            CriteriaBuilder builder = session.getCriteriaBuilder();
-            CriteriaQuery<T> criteria = builder.createQuery(entityClass);
-            Root<T> root = criteria.from(entityClass);
-            querySpec.apply(root, criteria, builder);
-            val query = session.createQuery(criteria)
-                    .setFirstResult(start)
-                    .setMaxResults(numRows);
-            return list(query);
-        }
-
 
         long count(DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
@@ -430,26 +415,6 @@ public class LookupDao<T> implements ShardedDao<T> {
                     try {
                         val dao = daos.get(shardId);
                         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, querySpec, "scatterGather",
-                                shardId);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }).flatMap(Collection::stream).collect(Collectors.toList());
-    }
-
-    /**
-     * Queries using the specified criteria across all shards and returns the result.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
-     *
-     * @param querySpec The select criteria
-     * @return List of elements or empty if none match
-     */
-    public List<T> scatterGather(final QuerySpec<T, T> querySpec, int start, int numRows) {
-        return IntStream.range(0, daos.size())
-                .mapToObj(shardId -> {
-                    try {
-                        val dao = daos.get(shardId);
-                        return transactionExecutor.execute(dao.sessionFactory, true, spec -> dao.select(spec, start, numRows), querySpec, "scatterGather",
                                 shardId);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
