@@ -301,6 +301,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
+    /**
+     * Update rows matching the querySpec through locked context
+     *
+     * @param context    Parent locked context which will be used for this operation
+     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param updater    Update to be applied on each row
+     * @param updateNext Determines if only 1 row needs to be updated or all selected rows need to be updated
+     */
     <U> boolean update(LockedContext<U> context,
                        QuerySpec<T, T> querySpec,
                        Function<T, T> updater,
@@ -339,22 +347,31 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     @Deprecated
-    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int first, int numResults) throws Exception {
+    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int start, int numResults) throws Exception {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .criteria(criteria)
-                .start(first)
+                .start(start)
                 .numRows(numResults)
                 .build();
         return transactionExecutor.execute(context.getSessionFactory(), true, dao::select, selectParam, t -> t, false,
                 "select", context.getShardId());
     }
 
-    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int first, int numResults) {
+
+    /**
+     * Select rows matching the querySpec through locked context
+     *
+     * @param context    Parent ReadOnlylocked context which will be used for this operation
+     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param start      Offset to be applied during fetch
+     * @param numResults Total number of records to fetch
+     */
+    <U> List<T> select(LookupDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int start, int numResults) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .querySpec(querySpec)
-                .start(first)
+                .start(start)
                 .numRows(numResults)
                 .build();
         return transactionExecutor.execute(context.getSessionFactory(), true, dao::select, selectParam, t -> t, false,
@@ -392,6 +409,10 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
+    /*
+
+     */
+
     @Deprecated
     public boolean update(String parentKey, DetachedCriteria criteria, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -422,6 +443,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
+
+    /**
+     * Updates a single row matching the querySpec
+     *
+     * @param parentKey Sharding key used for sessionFactory selection
+     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param updater   Mutation to be applied on selected row
+     */
     public boolean update(String parentKey, QuerySpec<T, T> querySpec, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -527,6 +556,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
+
+    /**
+     * Updates existing rows if output of {@code updater} returns more than 0 rows. If no rows are returned as part of
+     * output, {@code entityGenerator} is used to generate and persist the entity
+     *
+     * @param context         Parent locked context which will be used for this operation
+     * @param querySpec       QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param updater         Update to be applied on each row
+     * @param entityGenerator Generator method for generating a new entity
+     */
     <U> boolean createOrUpdate(LockedContext<U> context,
                                QuerySpec<T, T> querySpec,
                                Function<T, T> updater,
@@ -597,14 +636,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
-    public boolean updateAll(String parentKey, int start, int numRows, QuerySpec<T, T> querySpec, Function<T, T> updater) {
+
+    /**
+     * Updates all rows returned as part of the query
+     *
+     * @param parentKey  Sharding key used for sessionFactory selection
+     * @param start      Offset to be applied during fetch
+     * @param numResults Total number of records to fetch
+     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param updater    Change to be applied on each row
+     */
+    public boolean updateAll(String parentKey, int start, int numResults, QuerySpec<T, T> querySpec, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
             SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                     .querySpec(querySpec)
                     .start(start)
-                    .numRows(numRows)
+                    .numRows(numResults)
                     .build();
             return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(dao.sessionFactory, true, dao::select, selectParam, entityList -> {
                 if (entityList == null || entityList.isEmpty()) {
@@ -629,33 +678,52 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     @Deprecated
-    public List<T> select(String parentKey, DetachedCriteria criteria, int first, int numResults) throws Exception {
-        return select(parentKey, criteria, first, numResults, t -> t);
+    public List<T> select(String parentKey, DetachedCriteria criteria, int start, int numResults) throws Exception {
+        return select(parentKey, criteria, start, numResults, t -> t);
     }
 
-    public List<T> select(String parentKey, QuerySpec<T, T> querySpec, int first, int numResults) throws Exception {
-        return select(parentKey, querySpec, first, numResults, t -> t);
+    /**
+     * Reads all rows returned as part of the query
+     *
+     * @param parentKey  Sharding key used for sessionFactory selection
+     * @param start      Offset to be applied during fetch
+     * @param numResults Total number of records to fetch
+     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     */
+
+    public List<T> select(String parentKey, QuerySpec<T, T> querySpec, int start, int numResults) throws Exception {
+        return select(parentKey, querySpec, start, numResults, t -> t);
     }
 
 
     @Deprecated
-    public <U> U select(String parentKey, DetachedCriteria criteria, int first, int numResults, Function<List<T>, U> handler) throws Exception {
+    public <U> U select(String parentKey, DetachedCriteria criteria, int start, int numResults, Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .criteria(criteria)
-                .start(first)
+                .start(start)
                 .numRows(numResults)
                 .build();
         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, selectParam, handler, "select", shardId);
     }
 
-    public <U> U select(String parentKey, QuerySpec<T, T> querySpec, int first, int numResults, Function<List<T>, U> handler) throws Exception {
+
+    /**
+     * Reads all rows returned as part of the query
+     *
+     * @param parentKey  Sharding key used for sessionFactory selection
+     * @param start      Offset to be applied during fetch
+     * @param numResults Total number of records to fetch
+     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param handler    Transformation to be applied on each row of the output
+     */
+    public <U> U select(String parentKey, QuerySpec<T, T> querySpec, int start, int numResults, Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
                 .querySpec(querySpec)
-                .start(first)
+                .start(start)
                 .numRows(numResults)
                 .build();
         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, selectParam, handler, "select", shardId);
@@ -669,17 +737,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 "count", shardId);
     }
 
-    public long count(String parentKey, QuerySpec<T, Long> criteria) {
-        int shardId = shardCalculator.shardId(parentKey);
-        RelationalDaoPriv dao = daos.get(shardId);
-        return transactionExecutor.<Long, QuerySpec<T, Long>>execute(dao.sessionFactory, true, dao::count, criteria,
+    /**
+     * Returns count of rows matching the selection criteria
+     *
+     * @param parentKey Sharding key used for sessionFactory selection
+     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     */
+
+    public long count(String parentKey, QuerySpec<T, Long> querySpec) {
+        val shardId = shardCalculator.shardId(parentKey);
+        val dao = daos.get(shardId);
+        return transactionExecutor.<Long, QuerySpec<T, Long>>execute(dao.sessionFactory, true, dao::count, querySpec,
                 "count", shardId);
     }
 
 
     public boolean exists(String parentKey, Object key) {
-        int shardId = shardCalculator.shardId(parentKey);
-        RelationalDaoPriv dao = daos.get(shardId);
+        val shardId = shardCalculator.shardId(parentKey);
+        val dao = daos.get(shardId);
         Optional<T> result = transactionExecutor.<T, Object>executeAndResolve(dao.sessionFactory, true, dao::get, key,
                 "exists", shardId);
         return result.isPresent();
@@ -724,6 +799,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 }).flatMap(Collection::stream).collect(Collectors.toList());
     }
 
+    /**
+     * Reads rows across all shards given a selection criteria. Note that this will run query sequentially on shards
+     *
+     * @param start     Offset to be applied during fetch
+     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection*
+     * @param numRows   Total number of records to fetch
+     */
     public List<T> scatterGather(QuerySpec<T, T> querySpec, int start, int numRows) {
         return IntStream.range(0, daos.size())
                 .mapToObj(shardId -> {
@@ -746,9 +828,9 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return this.keyField;
     }
 
-    private <T> Query<T> createQuery(final Session session,
-                                     final Class<T> entityClass,
-                                     final QuerySpec<T, T> querySpec) {
+    private Query<T> createQuery(final Session session,
+                                 final Class<T> entityClass,
+                                 final QuerySpec<T, T> querySpec) {
         CriteriaBuilder builder = session.getCriteriaBuilder();
         CriteriaQuery<T> criteria = builder.createQuery(entityClass);
         Root<T> root = criteria.from(entityClass);

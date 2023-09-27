@@ -140,6 +140,13 @@ public class LockedContext<T> {
         });
     }
 
+    /**
+     * Queries using the specified criteria across all shards and returns the counts of rows satisfying the criteria.
+     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     *
+     * @param criteria The select criteria
+     * @return List of counts in each shard
+     */
     @Deprecated
     public <U> LockedContext<T> createOrUpdate(
             RelationalDao<U> relationalDao,
