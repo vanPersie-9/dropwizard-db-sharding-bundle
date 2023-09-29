@@ -515,7 +515,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Provides a scroll api for records across shards. This api will scroll down in descending order of the
+     * Provides a scroll api for records across shards. This api will scroll up in descending order of the
      * 'sortFieldName' field.
      * As this api goes back in order, newly added records will not be available in the scroll.
      * If the passed pointer is null, it will return the last pageSize records with a pointer to be passed to get the
