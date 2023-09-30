@@ -171,7 +171,6 @@ public class LookupDao<T> implements ShardedDao<T> {
          *
          * @param criteria The selection criteria to be applied to the query.
          * @return A list of matching entities or an empty list if none are found.
-         * @deprecated Use {@link #select(QuerySpec)} for query operations.
          */
         List<T> select(DetachedCriteria criteria) {
             return list(criteria.getExecutableCriteria(currentSession()));

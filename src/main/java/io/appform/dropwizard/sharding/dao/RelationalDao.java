@@ -318,12 +318,20 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Update rows matching the querySpec through locked context
+     * Updates entities within a specific shard based on a query, an update function, and scrolling through results.
      *
-     * @param context    Parent locked context which will be used for this operation
-     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param updater    Update to be applied on each row
-     * @param updateNext Determines if only 1 row needs to be updated or all selected rows need to be updated
+     * This method performs an update operation on a set of entities within a specific shard, as determined
+     * by the provided context and shard ID. It uses the provided query criteria to select entities and
+     * applies the provided updater function to update each entity. The scrolling mechanism allows for
+     * processing a large number of results efficiently.
+     *
+     * @param context A LockedContext<U> object containing shard information and a session factory.
+     * @param querySpec A QuerySpec object specifying the query criteria.
+     * @param updater A function that takes an old entity, applies updates, and returns a new entity.
+     * @param updateNext A BooleanSupplier that controls whether to continue updating the next entity.
+     * @return true if all entities were successfully updated, false otherwise.
+     * @throws RuntimeException If any exception occurs during the update operation with scrolling
+     *                          or if criteria are not met during the process.
      */
     <U> boolean update(LockedContext<U> context,
                        QuerySpec<T, T> querySpec,
@@ -375,12 +383,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     /**
-     * Select rows matching the querySpec through locked context
+     * Executes a database query within a specific shard, retrieving a list of query results.
      *
-     * @param context    Parent ReadOnlylocked context which will be used for this operation
-     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param start      Offset to be applied during fetch
-     * @param numResults Total number of records to fetch
+     * This method performs a database query on a specific shard, as determined by the provided
+     * context and shard ID. It retrieves a specified number of results starting from a given index
+     * based on the provided query criteria. The query results are returned as a list of entities.
+     *
+     * @param context A LookupDao.ReadOnlyContext object containing shard information and a session factory.
+     * @param querySpec A QuerySpec object specifying the query criteria and projection.
+     * @param start The starting index for the query results (pagination).
+     * @param numResults The number of results to retrieve from the query (pagination).
+     * @return A List of query results of type T.
      */
     <U> List<T> select(LookupDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int start, int numResults) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
@@ -405,6 +418,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return transactionExecutor.execute(dao.sessionFactory, true, handler, true, "runInSession", shardId);
     }
 
+    /**
+     * Updates an entity within a specific shard based on its unique identifier and an update function.
+     *
+     * This private method is responsible for updating an entity within a specific shard, as identified
+     * by the shard ID. It retrieves the entity with the provided unique identifier, applies the provided
+     * updater function to update the entity, and saves the updated entity back to the database.
+     *
+     * @param shardId The identifier of the shard where the entity is located.
+     * @param daoSessionFactory The SessionFactory associated with the DAO for database access.
+     * @param dao The RelationalDaoPriv responsible for accessing the database.
+     * @param id The unique identifier of the entity to be updated.
+     * @param updater A function that takes the old entity, applies updates, and returns the new entity.
+     * @param completeTransaction A boolean indicating whether the transaction should be completed after
+     *                           the update operation.
+     * @return true if the entity was successfully updated, false otherwise.
+     * @throws RuntimeException If any exception occurs during the update operation or if the entity with
+     *                          the given identifier is not found.
+     */
     private boolean update(int shardId, SessionFactory daoSessionFactory, RelationalDaoPriv dao,
                            Object id, Function<T, T> updater, boolean completeTransaction) {
         try {
@@ -423,10 +454,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
             throw new RuntimeException("Error updating entity: " + id, e);
         }
     }
-
-    /*
-
-     */
 
     public boolean update(String parentKey, DetachedCriteria criteria, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -459,11 +486,20 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     /**
-     * Updates a single row matching the querySpec
+     * Updates a single entity within a specific shard based on query criteria and an update function.
      *
-     * @param parentKey Sharding key used for sessionFactory selection
-     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param updater   Mutation to be applied on selected row
+     * This method performs the operation of updating an entity within a specific shard, as determined
+     * by the provided parent key and shard calculator. It uses the provided query criteria to select
+     * the entity to be updated. If the entity is found, the provided updater function is applied to
+     * update the entity, and the updated entity is saved.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for updating
+     *                  the entity.
+     * @param querySpec A QuerySpec object specifying the criteria for selecting the entity to update.
+     * @param updater A function that takes the old entity, applies updates, and returns the new entity.
+     * @return true if the entity was successfully updated, false otherwise.
+     * @throws RuntimeException If any exception occurs during the update operation or if criteria are
+     *                          not met during the process.
      */
     public boolean update(String parentKey, QuerySpec<T, T> querySpec, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -517,10 +553,19 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     /**
-     * Creates a {@code LockedContext} with all the rows matching the {@code QuerySpec}
+     * Acquires a write lock on entities matching the provided query criteria within a specific shard
+     * and returns a LockedContext for further operations.
      *
-     * @param parentKey       Sharding key to be used for {@code SessionFactory} selection
-     * @param querySpec       QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * This method performs the operation of acquiring a write lock on entities within a specific shard,
+     * as determined by the provided parent key and shard calculator. It uses the provided query criteria
+     * to select the entities to be locked. It then constructs and returns a LockedContext object that
+     * encapsulates the shard information and allows for subsequent operations on the locked entities.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  acquiring the write lock.
+     * @param querySpec A QuerySpec object specifying the criteria for selecting entities to lock.
+     * @return A LockedContext<T> object containing shard information and the locked entities,
+     *         enabling further operations on the locked entities within the specified shard.
      */
     public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T, T> querySpec) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -529,7 +574,20 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
-
+    /**
+     * Saves an entity within a specific shard and returns a LockedContext for further operations.
+     *
+     * This method performs the operation of saving an entity within a specific shard, as determined by
+     * the provided parent key and shard calculator. It then constructs and returns a LockedContext
+     * object that encapsulates the shard information and allows for subsequent operations on the
+     * saved entity.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  saving the entity.
+     * @param entity The entity of type T to be saved.
+     * @return A LockedContext<T> object containing shard information and the saved entity,
+     *         enabling further operations on the entity within the specified shard.
+     */
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -577,13 +635,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     /**
-     * Updates existing rows if output of {@code updater} returns more than 0 rows. If no rows are returned as part of
-     * output, {@code entityGenerator} is used to generate and persist the entity
+     * Creates or updates a single entity within a specific shard based on a query and update logic.
      *
-     * @param context         Parent locked context which will be used for this operation
-     * @param querySpec       QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param updater         Update to be applied on each row
-     * @param entityGenerator Generator method for generating a new entity
+     * This method performs a create or update operation on a single entity within a specific shard,
+     * as determined by the provided LockedContext and shard ID. It uses the provided query to check
+     * for the existence of an entity, and based on the result:
+     * - If no entity is found, it generates a new entity using the entity generator and saves it.
+     * - If an entity is found, it applies the provided updater function to update the entity.
+     *
+     * @param context A LockedContext object containing information about the shard and session factory.
+     * @param querySpec A QuerySpec object specifying the criteria for selecting an entity.
+     * @param updater A function that takes an old entity, applies updates, and returns a new entity.
+     * @param entityGenerator A supplier function for generating a new entity if none exists.
+     * @param <U> The type of result associated with the LockedContext.
+     * @return true if the entity was successfully created or updated, false otherwise.
+     * @throws RuntimeException If any exception occurs during the create/update operation or if criteria
+     *                          are not met during the process.
      */
     <U> boolean createOrUpdate(LockedContext<U> context,
                                QuerySpec<T, T> querySpec,
@@ -656,13 +723,23 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
 
     /**
-     * Updates all rows returned as part of the query
+     * Updates a batch of entities within a specific shard based on a query and an update function.
      *
-     * @param parentKey  Sharding key used for sessionFactory selection
-     * @param start      Offset to be applied during fetch
-     * @param numResults Total number of records to fetch
-     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param updater    Change to be applied on each row
+     * This method performs an update operation on a batch of entities within a specific shard,
+     * as determined by the provided parent key and shard calculator. It retrieves a specified
+     * number of entities that match the criteria defined in the provided QuerySpec object, applies
+     * the provided updater function to each entity, and updates the entities in the database.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  the update operation.
+     * @param start The starting index for selecting entities to update (pagination).
+     * @param numResults The number of entities to retrieve and update (pagination).
+     * @param querySpec A QuerySpec object specifying the criteria for selecting entities to update.
+     * @param updater A function that takes an old entity, applies updates, and returns a new entity.
+     * @return true if all entities were successfully updated, false otherwise.
+     * @throws RuntimeException If any exception occurs during the update operation or if
+     *                          criteria are not met, it is wrapped in a RuntimeException and
+     *                          propagated.
      */
     public boolean updateAll(String parentKey, int start, int numResults, QuerySpec<T, T> querySpec, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -699,14 +776,21 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Reads all rows returned as part of the query
+     * Executes a database query within a specific shard, retrieving a list of query results.
      *
-     * @param parentKey  Sharding key used for sessionFactory selection
-     * @param start      Offset to be applied during fetch
-     * @param numResults Total number of records to fetch
-     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * This method performs a database query on a specific shard, as determined by the provided
+     * parent key and shard calculator. It retrieves a specified number of results starting from
+     * a given index and returns them as a list. The query results are processed using a default
+     * identity function.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  the query.
+     * @param querySpec A QuerySpec object specifying the query criteria and projection.
+     * @param start The starting index for the query results (pagination).
+     * @param numResults The number of results to retrieve from the query (pagination).
+     * @return A List of query results of type T.
+     * @throws Exception If any exception occurs during the query execution, it is propagated.
      */
-
     public List<T> select(String parentKey, QuerySpec<T, T> querySpec, int start, int numResults) throws Exception {
         return select(parentKey, querySpec, start, numResults, t -> t);
     }
@@ -722,15 +806,25 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, selectParam, handler, "select", shardId);
     }
 
-
     /**
-     * Reads all rows returned as part of the query
+     * Executes a database query within a specific shard, retrieving and processing the results.
      *
-     * @param parentKey  Sharding key used for sessionFactory selection
-     * @param start      Offset to be applied during fetch
-     * @param numResults Total number of records to fetch
-     * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
-     * @param handler    Transformation to be applied on each row of the output
+     * This method performs a database query on a specific shard, as determined by the provided
+     * parent key and shard calculator. It retrieves a specified number of results starting from
+     * a given index, processes the results using the provided handler function, and returns the
+     * result of the handler function.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  the query.
+     * @param querySpec A QuerySpec object specifying the query criteria and projection.
+     * @param start The starting index for the query results (pagination).
+     * @param numResults The number of results to retrieve from the query (pagination).
+     * @param handler A function that processes the list of query results and returns a result
+     *                of type U.
+     * @param <U> The type of result to be returned by the handler function.
+     * @return The result of applying the handler function to the query results.
+     * @throws Exception If any exception occurs during the query execution or result
+     *                   processing, it is propagated.
      */
     public <U> U select(String parentKey, QuerySpec<T, T> querySpec, int start, int numResults, Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
@@ -751,10 +845,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Returns count of rows matching the selection criteria
+     * Counts the number of records matching a specified query in a given shard
      *
-     * @param parentKey Sharding key used for sessionFactory selection
-     * @param querySpec {@link io.appform.dropwizard.sharding.query.QuerySpec} to be used. This should contain all JPA filters which need to be applied for row selection
+     * This method calculates and returns the count of records that match the criteria defined
+     * in the provided QuerySpec object. The counting operation is performed within the shard
+     * associated with the provided parent key, as determined by the shard calculator.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for
+     *                  the counting operation.
+     * @param querySpec A QuerySpec object specifying the query criteria for counting records.
+     * @return The total count of records matching the specified query criteria.
+     * @throws RuntimeException If any exception occurs during the counting operation, it is
+     *                          wrapped in a RuntimeException and propagated.
      */
     public long count(String parentKey, QuerySpec<T, Long> querySpec) {
         val shardId = shardCalculator.shardId(parentKey);
@@ -792,7 +894,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 }).collect(Collectors.toList());
     }
 
-    @Deprecated
     public List<T> scatterGather(DetachedCriteria criteria, int start, int numRows) {
         return IntStream.range(0, daos.size())
                 .mapToObj(shardId -> {
@@ -812,11 +913,15 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Reads rows across all shards given a selection criteria. Note that this will run query sequentially on shards
+     * Executes a scatter-gather operation across multiple Data Access Objects (DAOs) in a serial manner
      *
-     * @param start     Offset to be applied during fetch
-     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection*
-     * @param numRows   Total number of records to fetch
+     * @param querySpec A QuerySpec object specifying the query to execute.
+     * @param start The starting index for the query results (pagination).
+     * @param numRows The number of rows to retrieve in the query results (pagination).
+     * @return A List of type T containing the aggregated query results from all shards.
+     * @throws RuntimeException If any exception occurs during the execution of queries on
+     *                          individual shards, it is wrapped in a RuntimeException and
+     *                          propagated.
      */
     public List<T> scatterGather(QuerySpec<T, T> querySpec, int start, int numRows) {
         return IntStream.range(0, daos.size())

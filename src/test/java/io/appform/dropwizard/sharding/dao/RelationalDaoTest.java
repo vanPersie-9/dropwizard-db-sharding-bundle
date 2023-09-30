@@ -42,8 +42,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -287,20 +285,6 @@ public class RelationalDaoTest {
     private List<String> generateIdsInSameShard(final int numIdsToBeGenerated) {
         int expectedShardIndex = RandomUtils.nextInt(0, sessionFactories.size());
         return generateIdsInSameShard(expectedShardIndex, numIdsToBeGenerated);
-    }
-
-    private List<List<String>> generateIdsInDifferentShard(int numIdsToBeGenerated) {
-        List<Integer> allowedIndexes = new ArrayList<>();
-        for (int i = 0; i < sessionFactories.size(); i++) {
-            allowedIndexes.add(i);
-        }
-        Collections.shuffle(allowedIndexes);
-        int expectedShardIndexOne = allowedIndexes.get(0);
-        int expectedShardIndexTwo = allowedIndexes.get(1);
-        return Lists.newArrayList(
-                generateIdsInSameShard(expectedShardIndexOne, numIdsToBeGenerated),
-                generateIdsInSameShard(expectedShardIndexTwo, numIdsToBeGenerated)
-        );
     }
 
     private List<String> generateIdsInSameShard(int expectedShardIndex, int numIdsToBeGenerated) {
