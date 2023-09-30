@@ -60,7 +60,6 @@ import io.dropwizard.setup.Environment;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.SessionFactory;
 import org.reflections.Reflections;
@@ -380,7 +379,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
-        for (var observer : observers) {
+        for (TransactionObserver observer : observers) {
             if (null == observer) {
                 return;
             }

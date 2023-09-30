@@ -33,7 +33,6 @@ import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Session;
@@ -259,10 +258,20 @@ public class LookupDao<T> implements ShardedDao<T> {
     private final TransactionObserver observer;
 
     /**
-     * Creates a new sharded DAO. The number of managed shards and bucketing is controlled by the {@link ShardManager}.
+     * Constructs a LookupDao instance for querying and managing entities across multiple shards.
      *
-     * @param sessionFactories a session provider for each shard
-     * @param shardCalculator  calculator for shards
+     * This constructor initializes a LookupDao instance for working with entities of the specified class
+     * distributed across multiple shards. It requires a list of session factories, a shard calculator,
+     * sharding options, a shard information provider, and a transaction observer.
+     *
+     * @param sessionFactories A list of SessionFactory instances for database access across shards.
+     * @param entityClass The Class representing the type of entities managed by this LookupDao.
+     * @param shardCalculator A ShardCalculator instance used to determine the shard for each operation.
+     * @param shardingOptions ShardingBundleOptions specifying additional sharding configuration options.
+     * @param shardInfoProvider A ShardInfoProvider for retrieving shard information.
+     * @param observer A TransactionObserver for monitoring transaction events.
+     * @throws IllegalArgumentException If the entity class does not have exactly one field marked as LookupKey,
+     *         if the key field is not accessible, or if it is not of type String.
      */
     public LookupDao(
             List<SessionFactory> sessionFactories,
@@ -697,6 +706,13 @@ public class LookupDao<T> implements ShardedDao<T> {
                 shardId);
     }
 
+    /**
+     * Retrieves the key field associated with the entity class.
+     *
+     * This method returns the Field object representing the key field associated with the entity class.
+     *
+     * @return The Field object representing the key field of the entity class.
+     */
     protected Field getKeyField() {
         return this.keyField;
     }
@@ -887,7 +903,6 @@ public class LookupDao<T> implements ShardedDao<T> {
          * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
          * The filter function selectively applies the consumer function to the chosen parent entity.
          *
-         *
          * @param <U>           The type of child entities.
          * @param relationalDao The relational data access object used to retrieve child entities.
          * @param querySpec     The query specification for selecting parent entities.
@@ -926,18 +941,19 @@ public class LookupDao<T> implements ShardedDao<T> {
 
         /**
          * Reads and augments a parent entity using a relational DAO, applying a filter and consumer function.
-         *
+         * <p>
          * This method reads and potentially augments a parent entity using a provided relational DAO
          * and query specification within the current context. It applies a filter to the parent entity
          * and, if the filter condition is met, executes a query to retrieve related child entities.
-         * The retrieved child entities are then passed to a consumer function for further processing.
+         * The retrieved child entities are then passed to a consumer function for further processing </p>
          *
+         * @param <U> The type of the result expected from the query.
          * @param relationalDao A RelationalDao<U> representing the DAO for retrieving child entities.
-         * @param querySpec A QuerySpec<U, U> specifying the criteria for selecting child entities.
-         * @param first The index of the first result to retrieve (pagination).
-         * @param numResults The number of child entities to retrieve (pagination).
-         * @param consumer A BiConsumer<T, List<U>> for processing the parent entity and its child entities.
-         * @param filter A Predicate<T> for filtering parent entities to decide whether to process them.
+         * @param querySpec     A QuerySpec<U, U> specifying the criteria for selecting child entities.
+         * @param first         The index of the first result to retrieve (pagination).
+         * @param numResults    The number of child entities to retrieve (pagination).
+         * @param consumer      A BiConsumer<T, List<U>> for processing the parent entity and its child entities.
+         * @param filter        A Predicate<T> for filtering parent entities to decide whether to process them.
          * @return A ReadOnlyContext<T> representing the current context.
          * @throws RuntimeException If any exception occurs during the execution of the query or processing
          *                          of the parent and child entities.
@@ -973,7 +989,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return An optional containing the retrieved entity, or an empty optional if not found.
          */
         public Optional<T> execute() {
-            var result = executeImpl();
+            T result = executeImpl();
             if (null == result
                     && null != entityPopulator
                     && Boolean.TRUE.equals(entityPopulator.get())) {//Try to populate entity (maybe from cold store etc)

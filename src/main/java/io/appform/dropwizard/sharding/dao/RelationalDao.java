@@ -202,11 +202,20 @@ public class RelationalDao<T> implements ShardedDao<T> {
     private final TransactionObserver observer;
 
     /**
-     * Create a relational DAO.
+     * Constructs a RelationalDao instance for managing entities across multiple shards.
      *
-     * @param sessionFactories List of session factories. One for each shard.
-     * @param entityClass      The class for which the dao will be used.
-     * @param shardCalculator
+     * This constructor initializes a RelationalDao instance for working with entities of the specified class
+     * distributed across multiple shards. It requires a list of session factories, a shard calculator,
+     * a shard information provider, and a transaction observer. The entity class must designate one field as
+     * the primary key using the `@Id` annotation.
+     *
+     * @param sessionFactories A list of SessionFactory instances for database access across shards.
+     * @param entityClass The Class representing the type of entities managed by this RelationalDao.
+     * @param shardCalculator A ShardCalculator instance used to determine the shard for each operation.
+     * @param shardInfoProvider A ShardInfoProvider for retrieving shard information.
+     * @param observer A TransactionObserver for monitoring transaction events.
+     * @throws IllegalArgumentException If the entity class does not have exactly one field designated as @Id,
+     *         if the designated key field is not accessible, or if it is not of type String.
      */
     public RelationalDao(
             List<SessionFactory> sessionFactories, Class<T> entityClass,
@@ -234,10 +243,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
-
+    /**
+     * Retrieves an entity associated with a specific key from the database and returns it wrapped in an Optional.
+     *
+     * This method allows you to retrieve an entity associated with a parent key and a specific key from the database.
+     * It uses the superclass's `get` method for the retrieval operation and returns the retrieved entity wrapped in an Optional.
+     * If the entity is found in the database, it is returned within the Optional; otherwise, an empty Optional is returned.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for updating the entity.
+     * @param key The specific key or identifier of the entity to retrieve.
+     * @return An Optional containing the retrieved entity if found, or an empty Optional if the entity is not found.
+     * @throws Exception If an error occurs during the retrieval process.
+     */
     public Optional<T> get(String parentKey, Object key) throws Exception {
         return Optional.ofNullable(get(parentKey, key, t -> t));
     }
+
 
     public <U> U get(String parentKey, Object key, Function<T, U> function) {
         int shardId = shardCalculator.shardId(parentKey);
@@ -246,6 +267,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 "get", shardId);
     }
 
+    /**
+     * Saves an entity to the database and returns the saved entity wrapped in an Optional.
+     *
+     * This method allows you to save an entity associated with a parent key to the database using the specified parent key.
+     * It uses the superclass's `save` method for the saving operation and returns the saved entity wrapped in an Optional.
+     * If the save operation is successful, the saved entity is returned; otherwise, an empty Optional is returned.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for updating the entity.
+     * @param entity The entity to be saved.
+     * @return An Optional containing the saved entity if the save operation is successful, or an empty Optional if the save operation fails.
+     * @throws Exception If an error occurs during the save operation.
+     */
     public Optional<T> save(String parentKey, T entity) throws Exception {
         return Optional.ofNullable(save(parentKey, entity, t -> t));
     }
@@ -257,6 +290,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 shardId);
     }
 
+
+    /**
+     * Saves a collection of entities associated to the database and returns a boolean indicating the success of the operation.
+     *
+     * This method allows you to save a collection of entities associated with a parent key to the database using the specified parent key.
+     * It uses the superclass's `saveAll` method for the bulk saving operation and returns `true` if the operation is successful;
+     * otherwise, it returns `false`.
+     *
+     * @param parentKey A string representing the parent key that determines the shard for updating the entity.
+     * @param entities The collection of entities to be saved.
+     * @return `true` if the bulk save operation is successful, or `false` if it fails.
+     */
     public boolean saveAll(String parentKey, Collection<T> entities) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -275,12 +320,40 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 "save", context.getShardId());
     }
 
+
+
+    /**
+     * Updates an entity within a locked context using a specific ID and an updater function.
+     *
+     * This method updates an entity within a locked context using the provided ID and an updater function.
+     * It is designed to work within the context of a locked transaction. The method delegates the update operation to
+     * the DAO associated with the locked context and returns a boolean indicating the success of the update operation.
+     *
+     * @param context The locked context within which the entity is updated.
+     * @param id The ID of the entity to be updated.
+     * @param updater A function that takes the current entity and returns the updated entity.
+     * @return `true` if the entity is successfully updated, or `false` if the update operation fails.
+     */
     <U> boolean update(LockedContext<U> context, Object id, Function<T, T> updater) {
         RelationalDaoPriv dao = daos.get(context.getShardId());
         return update(context.getShardId(), context.getSessionFactory(), dao, id, updater, false);
     }
 
-
+    /**
+     * Updates entities matching the specified criteria within a locked context using an updater function.
+     *
+     * This method updates entities within a locked context based on the provided criteria and an updater function.
+     * It allows you to specify a DetachedCriteria object to filter the entities to be updated. The method iterates
+     * through the matched entities, applies the updater function to each entity, and performs the update operation.
+     * The update process continues as long as the `updateNext` supplier returns `true` and there are more matching entities.
+     *
+     * @param context The locked context within which entities are updated.
+     * @param criteria A DetachedCriteria object representing the criteria for filtering entities to update.
+     * @param updater A function that takes an entity and returns the updated entity.
+     * @param updateNext A BooleanSupplier that determines whether to continue updating the next entity in the result set.
+     * @return `true` if at least one entity is successfully updated, or `false` if no entities are updated or the update process fails.
+     * @throws RuntimeException If an error occurs during the update process.
+     */
     <U> boolean update(LockedContext<U> context,
                        DetachedCriteria criteria,
                        Function<T, T> updater,
