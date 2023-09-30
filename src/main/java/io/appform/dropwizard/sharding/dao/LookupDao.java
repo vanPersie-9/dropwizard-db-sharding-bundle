@@ -69,36 +69,69 @@ import static io.appform.dropwizard.sharding.query.QueryUtils.equalityFilter;
 public class LookupDao<T> implements ShardedDao<T> {
 
     /**
-     * This DAO wil be used to perform the ops inside a shard
+     * The {@code LookupDaoPriv} class is a private implementation of a data access object (DAO)
+     * responsible for performing database operations related to a specific entity type {@code T}.
+     * It extends {@link AbstractDAO} to leverage common database access functionality provided by
+     * the parent class.
+     *
+     * <p>Instances of this class are typically created within a broader context and encapsulate
+     * database access operations specific to a particular entity type. These operations include
+     * retrieval, modification, querying, and deletion of records associated with the entity.
+     *
+     * <p>It uses a Hibernate {@link SessionFactory} to manage database sessions and perform
+     * operations within the scope of a session.
+     *
+     * @param <T> The entity type this DAO operates on.
      */
     private final class LookupDaoPriv extends AbstractDAO<T> {
 
+        /**
+         * The Hibernate {@code SessionFactory} used for database operations.
+         */
         private final SessionFactory sessionFactory;
 
+        /**
+         * Constructs a new {@code LookupDaoPriv} instance with the provided Hibernate
+         * {@link SessionFactory}. This constructor initializes the DAO with the session factory,
+         * which will be used for managing database operations.
+         *
+         * @param sessionFactory The Hibernate {@code SessionFactory} for database access.
+         */
         public LookupDaoPriv(SessionFactory sessionFactory) {
             super(sessionFactory);
             this.sessionFactory = sessionFactory;
         }
 
         /**
-         * Get an element from the shard.
+         * Retrieves an entity from the shard based on the provided lookup key. The entity is
+         * retrieved without any locking applied.
          *
-         * @param lookupKey Id of the object
-         * @return Extracted element or null if not found.
+         * @param lookupKey The unique lookup key identifying the entity.
+         * @return The retrieved entity, or null if the entity is not found.
          */
         T get(String lookupKey) {
             return getLocked(lookupKey, LockModeType.NONE);
         }
 
+        /**
+         * Retrieves an entity from the shard with a pessimistic write lock applied. This method
+         * is typically used for write operations that require exclusive access to the entity.
+         *
+         * @param lookupKey The unique lookup key identifying the entity.
+         * @return The retrieved entity, or null if the entity is not found.
+         */
         T getLockedForWrite(String lookupKey) {
             return getLocked(lookupKey, LockModeType.PESSIMISTIC_WRITE);
         }
 
         /**
-         * Get an element from the shard.
+         * Retrieves an entity from the shard with the specified lock mode applied. The entity is
+         * locked with the specified lock mode to control concurrent access.
          *
-         * @param lookupKey Id of the object
-         * @return Extracted element or null if not found.
+         * @param lookupKey The unique lookup key identifying the entity.
+         * @param lockMode  The type of lock to be applied (e.g., NONE, PESSIMISTIC_WRITE).
+         * @return The retrieved entity, or null if the entity is not found.
+         * @throws org.hibernate.NonUniqueResultException if database returns more than 1 rows for {@code lookupKey}
          */
         T getLocked(String lookupKey, LockModeType lockMode) {
             val session = currentSession();
@@ -110,31 +143,47 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Save the lookup element. Returns the augmented element id any generated fields are present.
+         * Saves an entity to the shard. The entity is persisted in the database, and any
+         * generated fields are returned as part of the augmented entity.
          *
-         * @param entity Object to save
-         * @return Augmented entity
+         * @param entity The entity to be saved to the shard.
+         * @return The augmented entity with generated fields populated.
          */
         T save(T entity) {
             return persist(entity);
         }
 
+        /**
+         * Updates the state of an entity in the shard. The entity is first detached from the
+         * current session to ensure that updates are performed. The updated entity is then
+         * associated with the session for synchronization.
+         *
+         * @param entity The entity to be updated in the shard.
+         */
         void update(T entity) {
             currentSession().evict(entity); //Detach .. otherwise update is a no-op
             currentSession().update(entity);
         }
 
         /**
-         * Run a query inside this shard and return the matching list.
+         * Runs a query inside the shard based on the provided {@code DetachedCriteria} and
+         * returns a list of matching entities.
          *
-         * @param criteria selection criteria to be applied.
-         * @return List of elements or empty list if none found
+         * @param criteria The selection criteria to be applied to the query.
+         * @return A list of matching entities or an empty list if none are found.
+         * @deprecated Use {@link #select(QuerySpec)} for query operations.
          */
-        @Deprecated
         List<T> select(DetachedCriteria criteria) {
             return list(criteria.getExecutableCriteria(currentSession()));
         }
 
+        /**
+         * Runs a query inside the shard based on the provided {@code QuerySpec} and returns a
+         * list of matching entities.
+         *
+         * @param querySpec The query specification that defines the criteria and conditions.
+         * @return A list of matching entities or an empty list if none are found.
+         */
         List<T> select(final QuerySpec<T, T> querySpec) {
             val session = currentSession();
             val builder = session.getCriteriaBuilder();
@@ -144,6 +193,13 @@ public class LookupDao<T> implements ShardedDao<T> {
             return list(session.createQuery(criteria));
         }
 
+        /**
+         * Counts the number of entities that match the provided {@code DetachedCriteria}.
+         * The count is based on the selection criteria specified in the query.
+         *
+         * @param criteria The selection criteria to be applied for counting.
+         * @return The number of matching entities.
+         */
         long count(DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
                     .setProjection(Projections.rowCount())
@@ -151,7 +207,12 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Delete an object
+         * Deletes an entity from the shard based on the provided ID. The entity is retrieved
+         * and locked with a pessimistic write lock before deletion to ensure exclusive access.
+         *
+         * @param id The unique ID of the entity to be deleted.
+         * @return {@code true} if the entity is successfully deleted, {@code false} if it does
+         * not exist.
          */
         boolean delete(String id) {
             return Optional.ofNullable(getLocked(id, LockModeType.PESSIMISTIC_WRITE))
@@ -163,6 +224,20 @@ public class LookupDao<T> implements ShardedDao<T> {
 
         }
 
+
+        /**
+         * Executes an update operation within the shard based on the provided
+         * {@code UpdateOperationMeta} metadata. This method is used for performing batch updates
+         * or modifications to entities matching specific criteria.
+         *
+         * <p>The update operation is defined by a named query associated with the shard, as specified
+         * in the {@code UpdateOperationMeta} object. Any parameters required for the query are
+         * provided in the metadata, and the query is executed within the current database session.
+         *
+         * @param updateOperationMeta The metadata defining the update operation, including the
+         *                            named query and parameters.
+         * @return The number of entities affected by the update operation.
+         */
         public int update(final UpdateOperationMeta updateOperationMeta) {
             Query query = currentSession().createNamedQuery(updateOperationMeta.getQueryName());
             updateOperationMeta.getParams().forEach(query::setParameter);
@@ -297,18 +372,55 @@ public class LookupDao<T> implements ShardedDao<T> {
                 "save", shardId);
     }
 
+
+    /**
+     * Updates an entity. For this update, first a lock is taken on database on selected row (using <i>for update</i> semantics)
+     * and {@code updater} is applied on the retrieved entity. It is prudent to not perform any time-consuming activity inside
+     * {@code updater} to prevent long lasting locks on database
+     *
+     * @param id      The ID of the entity to update.
+     * @param updater A function that takes an optional entity and returns the updated entity.
+     * @return True if the update was successful, false otherwise.
+     */
     public boolean updateInLock(String id, Function<Optional<T>, T> updater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return updateImpl(id, dao::getLockedForWrite, updater, shardId);
     }
 
+    /**
+     * Updates an entity within the shard identified by the provided {@code id} based on the
+     * transformation defined by the {@code updater} function
+     *
+     * <p>This method is commonly used for modifying the state of an existing entity within the shard
+     * by applying a transformation defined by the {@code updater} function. The {@code updater} function
+     * takes an optional existing entity (if present) and returns the updated entity.
+     *
+     * @param id      The unique identifier of the entity to be updated.
+     * @param updater A function that defines the transformation to be applied to the entity.
+     *                It takes an optional existing entity as input and returns the updated entity.
+     * @return {@code true} if the entity is successfully updated, {@code false} if it does not exist.
+     */
     public boolean update(String id, Function<Optional<T>, T> updater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return updateImpl(id, dao::get, updater, shardId);
     }
 
+    /**
+     * Executes an update operation within the shard based on a predefined query defined in the
+     * provided {@code updateOperationMeta}. This method is commonly used for performing batch
+     * updates or modifications to entities matching specific criteria.
+     *
+     * <p>The update operation is specified by the {@code updateOperationMeta} object, which includes
+     * the name of the named query to be executed and any parameters required for the query.
+     *
+     * @param id                  The unique identifier or key associated with the shard where the
+     *                            update operation will be performed.
+     * @param updateOperationMeta The metadata defining the update operation, including the named
+     *                            query and parameters.
+     * @return The number of entities affected by the update operation.
+     */
     public int updateUsingQuery(String id, UpdateOperationMeta updateOperationMeta) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
@@ -316,6 +428,21 @@ public class LookupDao<T> implements ShardedDao<T> {
                 "updateUsingQuery", shardId);
     }
 
+    /**
+     * Updates an entity in the database based on the provided ID using a getter and updater function.
+     *
+     * <p>This method retrieves an entity from the database using the provided getter function, applies
+     * the updater function to the retrieved entity, and updates the entity in the database if the updater
+     * function returns a non-null value. The update operation is performed on the shard associated with the
+     * provided ID.
+     *
+     * @param id      The ID of the entity to be updated in the database.
+     * @param getter  A function that retrieves the current state of the entity from the database.
+     * @param updater A function that updates the entity based on its current state.
+     * @param shardId The shard ID associated with the entity's ID.
+     * @return True if the entity was successfully updated, false otherwise.
+     * @throws java.lang.RuntimeException If an error occurs during entity retrieval, update, or transaction management.
+     */
     private boolean updateImpl(
             String id,
             Function<String, T> getter,
@@ -336,6 +463,17 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
     }
 
+    /**
+     * Creates and returns a locked context for executing write operations on an entity with the specified ID.
+     *
+     * <p>This method calculates the shard ID based on the provided entity ID, retrieves the LookupDaoPriv
+     * for the corresponding shard, and creates a locked context for executing write operations on the entity.
+     * The entity is locked for write access within the database transaction.
+     *
+     * @param id The ID of the entity for which the locked context is created.
+     * @return A new LockedContext for executing write operations on the specified entity with write access.
+     * @throws java.lang.RuntimeException If an error occurs during entity locking or transaction management.
+     */
     public LockedContext<T> lockAndGetExecutor(final String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
@@ -343,6 +481,16 @@ public class LookupDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
+    /**
+     * Creates and returns a read-only context for executing read operations on an entity with the specified ID.
+     *
+     * <p>This method calculates the shard ID based on the provided entity ID, retrieves the LookupDaoPriv
+     * for the corresponding shard, and creates a read-only context for executing read operations on the entity.
+     * It does not perform entity population during read operations.
+     *
+     * @param id The ID of the entity for which the read-only context is created.
+     * @return A new ReadOnlyContext for executing read operations on the specified entity.
+     */
     public ReadOnlyContext<T> readOnlyExecutor(final String id) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
@@ -355,6 +503,19 @@ public class LookupDao<T> implements ShardedDao<T> {
                 shardInfoProvider, entityClass, observer);
     }
 
+
+    /**
+     * Creates and returns a read-only context for executing read operations on an entity with the specified ID,
+     * optionally allowing entity population.
+     *
+     * <p>This method calculates the shard ID based on the provided entity ID, retrieves the LookupDaoPriv
+     * for the corresponding shard, and creates a read-only context for executing read operations on the entity.
+     * If the ID does not exist in database, entityPopulator is used to populate the entity
+     *
+     * @param id              The ID of the entity for which the read-only context is created.
+     * @param entityPopulator A supplier that determines whether entity population should be performed.
+     * @return A new ReadOnlyContext for executing read operations on the specified entity.
+     */
     public ReadOnlyContext<T> readOnlyExecutor(final String id,
                                                final Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
@@ -368,6 +529,18 @@ public class LookupDao<T> implements ShardedDao<T> {
                 shardInfoProvider, entityClass, observer);
     }
 
+
+    /**
+     * Saves an entity to the database and obtains a locked context for further operations.
+     *
+     * <p>This method first retrieves the ID of the provided entity and determines the shard where it should
+     * be saved based on the ID. It then saves the entity to the corresponding shard in the database and returns
+     * a LockedContext for further operations on the saved entity.
+     *
+     * @param entity The entity to be saved to the database.
+     * @return A LockedContext that allows further operations on the saved entity within a locked context.
+     * @throws java.lang.RuntimeException If an error occurs during entity saving or transaction management.
+     */
     public LockedContext<T> saveAndGetExecutor(T entity) {
         String id;
         try {
@@ -381,14 +554,19 @@ public class LookupDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
+
     /**
-     * Queries using the specified criteria across all shards and returns the result.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     * Performs a scatter-gather operation by executing a query on all database shards
+     * and collecting the results into a list of entities.
      *
-     * @param criteria The selct criteria
-     * @return List of elements or empty if none match
+     * <p>This method executes the provided query criteria on all available database shards in serial,
+     * retrieving entities that match the criteria from each shard. The results are then collected
+     * into a single list of entities, effectively performing a scatter-gather operation
+     *
+     * @param criteria The DetachedCriteria object representing the query criteria to be executed
+     *                 on all database shards.
+     * @return A list of entities obtained by executing the query criteria on all available shards.
      */
-    @Deprecated
     public List<T> scatterGather(DetachedCriteria criteria) {
         return IntStream.range(0, daos.size())
                 .mapToObj(shardId -> {
@@ -403,11 +581,17 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Queries using the specified criteria across all shards and returns the result.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     * Performs a scatter-gather operation by executing a query on all database shards
+     * and collecting the results into a list of entities.
      *
-     * @param querySpec The select criteria
-     * @return List of elements or empty if none match
+     * <p>This method executes the provided QuerySpec on all available database shards serially,
+     * retrieving entities that match the query criteria from each shard. The results are then collected
+     * into a single list of entities, effectively performing a scatter-gather operation.
+     *
+     * @param querySpec The QuerySpec object representing the query criteria to be executed
+     *                  on all database shards.
+     * @return A list of entities obtained by executing the query on all available shards.
+     * @throws java.lang.RuntimeException If an error occurs while querying the database.
      */
     public List<T> scatterGather(final QuerySpec<T, T> querySpec) {
         return IntStream.range(0, daos.size())
@@ -423,11 +607,17 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Queries using the specified criteria across all shards and returns the counts of rows satisfying the criteria.
-     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     * Counts the number of entities that match the specified criteria on each database shard.
      *
-     * @param criteria The select criteria
-     * @return List of counts in each shard
+     * <p>This method executes a count operation on all available database shards serially,
+     * counting the entities that satisfy the provided criteria on each shard. The results are then
+     * collected into a list, where each element corresponds to the count of matching entities on
+     * a specific shard.
+     *
+     * @param criteria The DetachedCriteria object representing the criteria for counting entities.
+     * @return A list of counts, where each count corresponds to the number of entities matching
+     * the criteria on a specific shard.
+     * @throws java.lang.RuntimeException If an error occurs while querying the database.
      */
     public List<Long> count(DetachedCriteria criteria) {
         return IntStream.range(0, daos.size())
@@ -442,11 +632,15 @@ public class LookupDao<T> implements ShardedDao<T> {
     }
 
     /**
-     * Queries across various shards and returns the results.
-     * <b>Note:</b> This method runs the query serially and is efficient over scatterGather and serial get of all key
+     * Retrieves a list of entities associated with the specified keys from the database.
      *
-     * @param keys The list of lookup keys
-     * @return List of elements or empty if none match
+     * <p>This method groups the provided keys by their corresponding database shards,
+     * and then retrieves entities that match these keys from each shard serially.
+     * The results are combined into a single list of entities and returned.
+     *
+     * @param keys A list of keys for which entities should be retrieved from the database.
+     * @return A list of entities obtained by querying the database for the specified keys.
+     * @throws java.lang.RuntimeException If an error occurs while querying the database.
      */
     public List<T> get(List<String> keys) {
         Map<Integer, List<String>> lookupKeysGroupByShards = keys.stream()
@@ -467,12 +661,37 @@ public class LookupDao<T> implements ShardedDao<T> {
         }).flatMap(Collection::stream).collect(Collectors.toList());
     }
 
+
+    /**
+     * Executes a function within a database session on the shard corresponding to the provided ID.
+     *
+     * <p>This method acquires a database session for the shard associated with the specified ID
+     * and executes the provided handler function within that session. It ensures that the session is
+     * properly managed, including transaction handling, and returns the result of the handler function.
+     *
+     * @param <U>     The type of the result returned by the handler function.
+     * @param id      The ID used to determine the shard where the session will be acquired.
+     * @param handler A function that takes a database session and returns a result of type U.
+     * @return The result of executing the handler function within the acquired database session.
+     * @throws java.lang.RuntimeException If an error occurs during database session management or while executing the handler.
+     */
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return transactionExecutor.execute(dao.sessionFactory, true, handler, true, "runInSession", shardId);
     }
 
+    /**
+     * Deletes an entity with the specified ID from the database.
+     *
+     * <p>This method identifies the shard associated with the provided ID, then executes a delete operation
+     * on the entity with the matching ID within that shard. It returns true if the delete operation was successful
+     * and false otherwise.
+     *
+     * @param id The ID of the entity to be deleted from the database.
+     * @return True if the entity was successfully deleted, false otherwise.
+     * @throws java.lang.RuntimeException If an error occurs during the delete operation or transaction management.
+     */
     public boolean delete(String id) {
         int shardId = shardCalculator.shardId(id);
         return transactionExecutor.execute(daos.get(shardId).sessionFactory, false, daos.get(shardId)::delete, id, "delete",
@@ -483,6 +702,17 @@ public class LookupDao<T> implements ShardedDao<T> {
         return this.keyField;
     }
 
+
+    /**
+     * The {@code ReadOnlyContext} class represents a context for executing read-only operations
+     * within a specific shard of a distributed database. It provides a mechanism to define and
+     * execute read operations on data stored in the shard while handling transaction management,
+     * entity retrieval, and optional entity population.
+     *
+     * <p>This class is typically used for retrieving and processing data from a specific shard.
+     *
+     * @param <T> The type of entity being operated on within the shard.
+     */
     @Getter
     public static class ReadOnlyContext<T> {
         private final int shardId;
@@ -521,14 +751,34 @@ public class LookupDao<T> implements ShardedDao<T> {
                     .build();
         }
 
-
+        /**
+         * Applies a custom operation to the retrieved entity.
+         *
+         * <p>This method allows developers to specify a custom operation to be applied to the
+         * retrieved entity. Multiple operations can be applied sequentially using method chaining.
+         *
+         * @param handler A function that takes the retrieved entity and applies a custom operation.
+         * @return This {@code ReadOnlyContext} instance for method chaining.
+         */
         public ReadOnlyContext<T> apply(Function<T, Void> handler) {
             this.operations.add(handler);
             return this;
         }
 
-
-        @Deprecated
+        /**
+         * Read and augment parent entities based on a DetachedCriteria, retrieving a single related entity
+         *
+         * <p>This method reads and augments parent entities based on the specified {@code criteria}, retrieving only a
+         * single child entity, and then applies the provided {@code consumer} function to augment it with related child
+         * entity. The consumer function is applied to parent entity.</p>
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param criteria      The DetachedCriteria for selecting and composing parent entities.
+         * @param consumer      A function that applies the child entity augmentation to the parent entity.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         */
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -536,6 +786,20 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, 0, 1, consumer, p -> true);
         }
 
+        /**
+         * Read and augment parent entities based on a QuerySpec, retrieving a single related entity and applying operation.
+         *
+         * <p>This method reads and augments parent entities based on the specified {@code querySpec}, retrieving only a
+         * single child entity, and then applies the provided {@code consumer} function to augment parent with the retrieved
+         * child entity.</p>
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param querySpec     The QuerySpec for selecting and composing parent entities.
+         * @param consumer      A function that applies the child entity augmentation to the parent entity.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         */
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 QuerySpec<U, U> querySpec,
@@ -543,7 +807,22 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, querySpec, 0, 1, consumer, p -> true);
         }
 
-        @Deprecated
+        /**
+         * Read and augment parent entities based on a DetachedCriteria and apply operations selectively.
+         *
+         * <p>This method augments parent entities based on the child entities selected through specified {@code criteria}
+         * The provided {@code consumer} function is then applied to augment the selected parent
+         * entity with related child entities.</p>
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param criteria      The DetachedCriteria for selecting and composing parent entities.
+         * @param first         The index of the first parent entity to retrieve.
+         * @param numResults    The maximum number of parent entities to retrieve.
+         * @param consumer      A function that applies the child entity augmentation to the parent entities.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         */
         public <U> ReadOnlyContext<T> readAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -553,6 +832,21 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, first, numResults, consumer, p -> true);
         }
 
+        /**
+         * Read and augment parent entities based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and apply operations selectively.
+         *
+         * <p>This method augments parent entity based on the child entities selected through specified {@link io.appform.dropwizard.sharding.query.QuerySpec}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param querySpec     The QuerySpec for selecting and composing parent entities.
+         * @param first         The index of the first parent entity to retrieve.
+         * @param numResults    The maximum number of parent entities to retrieve.
+         * @param consumer      A function that applies the child entity augmentation to the parent entities.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         */
         public <U> ReadOnlyContext<T> readAugmentParent(
                 RelationalDao<U> relationalDao,
                 QuerySpec<U, U> querySpec,
@@ -562,7 +856,23 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, querySpec, first, numResults, consumer, p -> true);
         }
 
-        @Deprecated
+        /**
+         * Read and augment parent entity based on a {@link org.hibernate.criterion.DetachedCriteria} and apply operations selectively.
+         *
+         * <p>This method augments parent entity based on the single child entity selected through specified {@link org.hibernate.criterion.DetachedCriteria}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         * The filter function selectively applies the consumer function to the chosen parent entity.
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param criteria      The DetachedCriteria for selecting parent entities.
+         * @param consumer      A function that applies the child entity augmentation to the parent entity.
+         * @param filter        A predicate function to filter the parent entity on which the consumer function is applied.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         *                          {@code readOneAugmentParent} method that accepts a {@code QuerySpec} for better query composition and
+         *                          type-safety.
+         */
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -571,6 +881,22 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, criteria, 0, 1, consumer, filter);
         }
 
+        /**
+         * Read and augment parent entity based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and apply operations selectively.
+         *
+         * <p>This method augments parent entity based on the single child entity selected through specified {@link io.appform.dropwizard.sharding.query.QuerySpec}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         * The filter function selectively applies the consumer function to the chosen parent entity.
+         *
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao The relational data access object used to retrieve child entities.
+         * @param querySpec     The query specification for selecting parent entities.
+         * @param consumer      A function that applies the child entity augmentation to the parent entity.
+         * @param filter        A predicate function to filter the parent entity on which the consumer function is applied.
+         * @return This {@code ReadOnlyContext} instance to allow for method chaining.
+         * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
+         */
         public <U> ReadOnlyContext<T> readOneAugmentParent(
                 RelationalDao<U> relationalDao,
                 QuerySpec<U, U> querySpec,
@@ -579,8 +905,6 @@ public class LookupDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, querySpec, 0, 1, consumer, filter);
         }
 
-
-        @Deprecated
         public <U> ReadOnlyContext<T> readAugmentParent(
                 RelationalDao<U> relationalDao,
                 DetachedCriteria criteria,
@@ -619,6 +943,17 @@ public class LookupDao<T> implements ShardedDao<T> {
             });
         }
 
+        /**
+         * Executes the read-only operation within the shard, retrieves the entity, applies any custom
+         * operations, and returns the result.
+         *
+         * <p> This method first tries to executeImpl() operations. If the resulting entity is null,
+         * this method tries to generate the populate the entity in database by calling {@code entityPopulator}
+         * If {@code entityPopulator} returns true, it is expected that entity is indeed populated in the database
+         * and hence {@code executeImpl()} is called again
+         *
+         * @return An optional containing the retrieved entity, or an empty optional if not found.
+         */
         public Optional<T> execute() {
             var result = executeImpl();
             if (null == result
@@ -629,6 +964,17 @@ public class LookupDao<T> implements ShardedDao<T> {
             return Optional.ofNullable(result);
         }
 
+        /**
+         * Execute a read operation within a transactional context and apply optional operations.
+         *
+         * <p>This method orchestrates the execution of a read operation within a transactional context.
+         * It ensures that transaction handling, including starting and ending the transaction, is managed properly.
+         * The read operation is performed using the provided {@code getter} function to retrieve data based on the
+         * specified {@code key}. Optional operations, if provided, are applied to the result before returning it.
+         *
+         * @return The result of the read operation after applying optional operations.
+         * @throws RuntimeException if an error occurs during the read operation or if there are transactional issues.
+         */
         private T executeImpl() {
             return observer.execute(executionContext, () -> {
                 TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);

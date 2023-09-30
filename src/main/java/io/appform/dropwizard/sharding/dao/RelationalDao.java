@@ -515,6 +515,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
+
+    /**
+     * Creates a {@code LockedContext} with all the rows matching the {@code QuerySpec}
+     *
+     * @param parentKey       Sharding key to be used for {@code SessionFactory} selection
+     * @param querySpec       QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     */
     public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T, T> querySpec) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -736,7 +743,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return transactionExecutor.execute(dao.sessionFactory, true, dao::select, selectParam, handler, "select", shardId);
     }
 
-    @Deprecated
     public long count(String parentKey, DetachedCriteria criteria) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -748,9 +754,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * Returns count of rows matching the selection criteria
      *
      * @param parentKey Sharding key used for sessionFactory selection
-     * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+     * @param querySpec {@link io.appform.dropwizard.sharding.query.QuerySpec} to be used. This should contain all JPA filters which need to be applied for row selection
      */
-
     public long count(String parentKey, QuerySpec<T, Long> querySpec) {
         val shardId = shardCalculator.shardId(parentKey);
         val dao = daos.get(shardId);
