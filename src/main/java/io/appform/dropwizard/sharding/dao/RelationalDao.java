@@ -75,6 +75,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
             this.sessionFactory = sessionFactory;
         }
 
+
+        /**
+         * Get a row matching the field annotated with {@code @Id} annotation
+         *
+         * @param lookupKey ID for which data needs to be fetched
+         */
+
         T get(final Object lookupKey) {
             val q = createQuery(currentSession(),
                     entityClass,
@@ -83,12 +90,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
             return uniqueResult(q.setLockMode(LockModeType.NONE));
         }
 
+        /**
+         * Reads all rows matching the {@code querySpec} in locked mode. This is equivalent to <i>for update</i> semantics
+         * during database fetch
+         *
+         * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+         */
         T getLockedForWrite(final QuerySpec<T, T> querySpec) {
             val q = createQuery(currentSession(), entityClass, querySpec);
             return uniqueResult(q.setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
-        @Deprecated
+
         T getLockedForWrite(DetachedCriteria criteria) {
             return uniqueResult(criteria.getExecutableCriteria(currentSession())
                     .setLockMode(LockMode.UPGRADE_NOWAIT));
@@ -132,13 +145,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     .scroll(ScrollMode.FORWARD_ONLY);
         }
 
-        @Deprecated
+
         long count(final DetachedCriteria criteria) {
             return (long) criteria.getExecutableCriteria(currentSession())
                     .setProjection(Projections.rowCount())
                     .uniqueResult();
         }
 
+        /**
+         * Return count of rows matching the {@code querySpec}
+         * @param querySpec  QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
+         */
         long count(final QuerySpec<T, Long> querySpec) {
             val session = currentSession();
             CriteriaBuilder criteriaBuilder = session.getCriteriaBuilder();
@@ -264,7 +281,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
 
-    @Deprecated
     <U> boolean update(LockedContext<U> context,
                        DetachedCriteria criteria,
                        Function<T, T> updater,
@@ -346,7 +362,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
 
-    @Deprecated
     <U> List<T> select(LookupDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int start, int numResults) throws Exception {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
@@ -413,7 +428,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
      */
 
-    @Deprecated
     public boolean update(String parentKey, DetachedCriteria criteria, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -494,7 +508,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 "updateUsingQuery", lockedContext.getShardId());
     }
 
-    @Deprecated
     public LockedContext<T> lockAndGetExecutor(String parentKey, DetachedCriteria criteria) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -517,7 +530,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 entityClass, shardInfoProvider, observer);
     }
 
-    @Deprecated
     <U> boolean createOrUpdate(LockedContext<U> context,
                                DetachedCriteria criteria,
                                Function<T, T> updater,
@@ -605,7 +617,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
 
-    @Deprecated
     public boolean updateAll(String parentKey, int start, int numRows, DetachedCriteria criteria, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
@@ -676,8 +687,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
     }
 
-
-    @Deprecated
     public List<T> select(String parentKey, DetachedCriteria criteria, int start, int numResults) throws Exception {
         return select(parentKey, criteria, start, numResults, t -> t);
     }
@@ -695,8 +704,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return select(parentKey, querySpec, start, numResults, t -> t);
     }
 
-
-    @Deprecated
     public <U> U select(String parentKey, DetachedCriteria criteria, int start, int numResults, Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
