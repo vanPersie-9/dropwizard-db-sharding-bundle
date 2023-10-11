@@ -19,10 +19,13 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.sharding.AssociationChildrenKey;
+import io.appform.dropwizard.sharding.sharding.AssociationParentKey;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
@@ -32,6 +35,9 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import lombok.var;
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Criteria;
 import org.hibernate.LockMode;
@@ -46,6 +52,7 @@ import org.hibernate.query.Query;
 
 import javax.persistence.Id;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -162,6 +169,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     private List<RelationalDaoPriv> daos;
+
+    @Getter
     private final Class<T> entityClass;
     @Getter
     private final ShardCalculator<String> shardCalculator;
@@ -565,7 +574,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults);
+        return readOnlyExecutor(parentKey, criteria, first, numResults, () -> false);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
@@ -634,59 +643,62 @@ public class RelationalDao<T> implements ShardedDao<T> {
         public <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
+                final boolean useChildAssociationKey,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer) {
-            return readAugmentParent(relationalDao, criteria, first, numResults, consumer, p -> true);
+            return readAugmentParent(relationalDao, criteria, useChildAssociationKey, first, numResults, consumer, p -> true);
         }
 
-        public <U> ReadOnlyContext<T> readAugmentParent(
+        private <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
+                final boolean useChildAssociationKey,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer,
                 final Predicate<T> filter) {
             return apply(parents -> {
                 parents.forEach(parent -> {
-                    if (filter.test(parent)) {
-                        try {
-                            consumer.accept(parent, relationalDao.select(this, criteria, first, numResults));
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
+                    if (!filter.test(parent)) {
+                        return;
+                    }
+                    try {
+                        DetachedCriteria calculatedCriteria;
+                        if (useChildAssociationKey) {
+                            val parentValue = determineAssociationParentValue(parent);
+                            val associationChildKey = determineAssociationChildKey(relationalDao.getEntityClass());
+                            calculatedCriteria = DetachedCriteria.forClass(relationalDao.getEntityClass())
+                                    .add(Restrictions.eq(associationChildKey, parentValue));
+                        } else {
+                            calculatedCriteria = criteria;
                         }
+                        consumer.accept(parent, relationalDao.select(this, calculatedCriteria, first, numResults));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
                     }
                 });
                 return null;
             });
         }
 
-        public <U> ReadOnlyContext<T> readAugmentMultiParent(
-                final RelationalDao<U> relationalDao,
-                final DetachedCriteria criteria,
-                final int first,
-                final int numResults,
-                final BiConsumer<List<T>, List<U>> consumer) {
-            return readAugmentMultiParent(relationalDao, criteria, first, numResults, consumer, p -> true);
+        private <U> String determineAssociationChildKey(Class<U> entityClass) {
+            Field child[] = FieldUtils.getFieldsWithAnnotation(entityClass, AssociationChildrenKey.class);
+            Preconditions.checkArgument(child.length != 0, "Missing association child key");
+            Preconditions.checkArgument(child.length == 1, "Only one field can be association child key");
+            return child[0].getName();
         }
 
-        private  <U> ReadOnlyContext<T> readAugmentMultiParent(
-                final RelationalDao<U> relationalDao,
-                final DetachedCriteria criteria,
-                final int first,
-                final int numResults,
-                final BiConsumer<List<T>, List<U>> consumer,
-                final Predicate<List<T>> filter) {
-            return apply(parents -> {
-                if (filter.test(parents)) {
-                    try {
-                        consumer.accept(parents, relationalDao.select(this, criteria, first, numResults));
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                return null;
-            });
+        private String determineAssociationParentValue(T parent) {
+            try {
+                Field parentKey[] = FieldUtils.getFieldsWithAnnotation(parent.getClass(), AssociationParentKey.class);
+                Preconditions.checkArgument(parentKey.length != 0, "Missing association parent key");
+                Preconditions.checkArgument(parentKey.length == 1, "Only one field can be association parent key");
+                val parentKeyName = parentKey[0].getName();
+                return BeanUtils.getProperty(parent, parentKeyName);
+            } catch (Exception e) {
+                throw new RuntimeException("Error while reading association parent value", e);
+            }
         }
 
         public Optional<List<T>> execute() {
