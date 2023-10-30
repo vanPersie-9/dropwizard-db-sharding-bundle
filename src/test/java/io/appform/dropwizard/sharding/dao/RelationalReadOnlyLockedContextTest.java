@@ -8,8 +8,6 @@ import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.interceptors.TimerObserver;
 import io.appform.dropwizard.sharding.dao.listeners.LoggingListener;
 import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
-import io.appform.dropwizard.sharding.sharding.AssociationChildrenKey;
-import io.appform.dropwizard.sharding.sharding.AssociationParentKey;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
@@ -22,8 +20,6 @@ import lombok.SneakyThrows;
 import lombok.ToString;
 import lombok.val;
 import org.hibernate.SessionFactory;
-import org.hibernate.annotations.Cascade;
-import org.hibernate.annotations.CascadeType;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
@@ -150,10 +146,13 @@ public class RelationalReadOnlyLockedContextTest {
         // USE CASE 1 : Using Association Key Annotations
         val criteria = DetachedCriteria.forClass(Company.class)
                 .add(Restrictions.in("companyId", Sets.newHashSet(company1.getCompanyId(), company2.getCompanyId())));
+        val assosicationSpec = Lists.newArrayList(
+                RelationalDao.QueryAssociationSpec.builder().childMappingKey("companyExtId").parentMappingKey("companyUsageId").build()
+        );
 
         val dataList = companyRelationalDao.readOnlyExecutor(parentKey, criteria, 0, 4)
-                .readAugmentParent(departmentRelationalDao, null, true, 0, Integer.MAX_VALUE, Company::setDepartments)
-                .readAugmentParent(ceoRelationalDao, null, true, 0, Integer.MAX_VALUE, (parent, childList) -> {
+                .readAugmentParent(departmentRelationalDao, null, assosicationSpec, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(ceoRelationalDao, null, assosicationSpec, 0, Integer.MAX_VALUE, (parent, childList) -> {
                     parent.setCeo(childList.stream().findAny().orElse(null));
                 })
                 .execute()
@@ -171,7 +170,7 @@ public class RelationalReadOnlyLockedContextTest {
                 .add(Restrictions.eq("companyExtId", companyToRetrieve));
 
         val dataList2 = companyRelationalDao.readOnlyExecutor(parentKey, companyCriteria, 0, 4)
-                .readAugmentParent(departmentRelationalDao, deptCriteria, false, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(departmentRelationalDao, deptCriteria, null, 0, Integer.MAX_VALUE, Company::setDepartments)
                 .execute()
                 .orElse(new ArrayList<>());
         System.out.println(new ObjectMapper().writeValueAsString(dataList2));
@@ -193,7 +192,6 @@ public class RelationalReadOnlyLockedContextTest {
         @Column(name = "company_id", nullable = false, unique = true)
         private long companyId;
 
-        @AssociationParentKey
         @Column(name = "companyUsageId", nullable = false)
         private String companyUsageId;
 
@@ -224,7 +222,6 @@ public class RelationalReadOnlyLockedContextTest {
         @Column(name = "name")
         private String name;
 
-        @AssociationChildrenKey
         @Column(name = "company_ext_id", nullable = false)
         private String companyExtId;
 
@@ -246,7 +243,6 @@ public class RelationalReadOnlyLockedContextTest {
         @Column(name = "name")
         private String name;
 
-        @AssociationChildrenKey
         @Column(name = "company_ext_id", nullable = false)
         private String companyExtId;
 

@@ -19,13 +19,10 @@ package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
-import io.appform.dropwizard.sharding.sharding.AssociationChildrenKey;
-import io.appform.dropwizard.sharding.sharding.AssociationParentKey;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
@@ -36,8 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import lombok.var;
 import org.apache.commons.beanutils.BeanUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.SerializationUtils;
+import org.apache.commons.beanutils.PropertyUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.Criteria;
 import org.hibernate.LockMode;
@@ -52,7 +49,6 @@ import org.hibernate.query.Query;
 
 import javax.persistence.Id;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -600,6 +596,15 @@ public class RelationalDao<T> implements ShardedDao<T> {
         );
     }
 
+
+    @Builder
+    @Getter
+    public static class QueryAssociationSpec {
+        private String parentMappingKey;
+        private String childMappingKey;
+
+    }
+
     @Getter
     public static class ReadOnlyContext<T> {
         private final int shardId;
@@ -643,17 +648,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
         public <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
-                final boolean useChildAssociationKey,
+                final List<QueryAssociationSpec> associations,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer) {
-            return readAugmentParent(relationalDao, criteria, useChildAssociationKey, first, numResults, consumer, p -> true);
+            return readAugmentParent(relationalDao, criteria, associations, first, numResults, consumer, p -> true);
         }
 
         private <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
-                final boolean useChildAssociationKey,
+                final List<QueryAssociationSpec> associations,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer,
@@ -665,11 +670,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     }
                     try {
                         DetachedCriteria calculatedCriteria;
-                        if (useChildAssociationKey) {
-                            val parentValue = determineAssociationParentValue(parent);
-                            val associationChildKey = determineAssociationChildKey(relationalDao.getEntityClass());
-                            calculatedCriteria = DetachedCriteria.forClass(relationalDao.getEntityClass())
-                                    .add(Restrictions.eq(associationChildKey, parentValue));
+                        if (CollectionUtils.isNotEmpty(associations)) {
+                            calculatedCriteria = buildCriteriaWithAssociationSpec(relationalDao.getEntityClass(), parent, associations);
                         } else {
                             calculatedCriteria = criteria;
                         }
@@ -682,20 +684,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
             });
         }
 
-        private <U> String determineAssociationChildKey(Class<U> entityClass) {
-            Field child[] = FieldUtils.getFieldsWithAnnotation(entityClass, AssociationChildrenKey.class);
-            Preconditions.checkArgument(child.length != 0, "Missing association child key");
-            Preconditions.checkArgument(child.length == 1, "Only one field can be association child key");
-            return child[0].getName();
+        private <U> DetachedCriteria buildCriteriaWithAssociationSpec(final Class<U> entityClass,
+                                                                      final T parent,
+                                                                      final List<QueryAssociationSpec> associations) {
+            val criteria = DetachedCriteria.forClass(entityClass);
+            for (QueryAssociationSpec spec : associations) {
+                criteria.add(Restrictions.eq(spec.getChildMappingKey(), extractParentValue(parent, spec.getParentMappingKey())));
+            }
+            return criteria;
         }
 
-        private String determineAssociationParentValue(T parent) {
+        private String extractParentValue(final T parent,
+                                          final String key) {
             try {
-                Field parentKey[] = FieldUtils.getFieldsWithAnnotation(parent.getClass(), AssociationParentKey.class);
-                Preconditions.checkArgument(parentKey.length != 0, "Missing association parent key");
-                Preconditions.checkArgument(parentKey.length == 1, "Only one field can be association parent key");
-                val parentKeyName = parentKey[0].getName();
-                return BeanUtils.getProperty(parent, parentKeyName);
+                val isPropertyPresent = PropertyUtils.isReadable(parent, key);
+                Preconditions.checkArgument(isPropertyPresent, "Missing property in bean");
+                return BeanUtils.getProperty(parent, key);
             } catch (Exception e) {
                 throw new RuntimeException("Error while reading association parent value", e);
             }
