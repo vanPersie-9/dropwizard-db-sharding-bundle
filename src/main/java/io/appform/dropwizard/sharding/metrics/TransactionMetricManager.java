@@ -43,15 +43,12 @@ public class TransactionMetricManager {
     }
 
     public MetricData getShardMetricData(final String shardName) {
-        val metricPrefix = METRIC_PREFIX + DELIMITER
-                + "shard"
-                + DELIMITER
-                + normalizeString(shardName);
+        val metricPrefix = getMetricPrefix("shard", shardName);
         return getMetricData(metricPrefix);
     }
 
     public MetricData getEntityOpMetricData(final TransactionExecutionContext context) {
-        val metricPrefix = getMetricPrefix(context.getEntityClass().getCanonicalName(),
+        val metricPrefix = getMetricPrefix("entity", context.getEntityClass().getCanonicalName(),
                 context.getDaoClass().getCanonicalName(),
                 context.getOpType(),
                 context.getLockedContextMode());

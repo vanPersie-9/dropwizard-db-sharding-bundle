@@ -68,7 +68,7 @@ class TransactionMetricManagerTest {
         val metrics = metricRegistry.getMetrics();
         assertEquals(4, metrics.size());
 
-        val metricPrefix = "db.sharding.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest." +
+        val metricPrefix = "db.sharding.entity.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest." +
                 "io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest." +
                 "read." +
                 "readMode.";
