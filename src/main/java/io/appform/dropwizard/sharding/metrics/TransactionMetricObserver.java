@@ -1,7 +1,7 @@
 package io.appform.dropwizard.sharding.metrics;
 
 import com.codahale.metrics.Timer;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import lombok.Getter;
@@ -59,6 +59,6 @@ public class TransactionMetricObserver extends TransactionObserver {
                 key -> metricManager.getEntityOpMetricData(context));
         val shardMetricData = shardMetricCache.computeIfAbsent(context.getShardName(),
                 key -> metricManager.getShardMetricData(context.getShardName()));
-        return Lists.newArrayList(entityOpMetricData, shardMetricData);
+        return ImmutableList.of(entityOpMetricData, shardMetricData);
     }
 }
