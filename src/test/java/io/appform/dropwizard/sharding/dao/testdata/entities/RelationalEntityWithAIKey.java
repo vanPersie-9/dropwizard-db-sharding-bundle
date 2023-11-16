@@ -11,7 +11,6 @@ import javax.persistence.*;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @Table(name = "relations")
 public class RelationalEntityWithAIKey {
 
@@ -24,4 +23,9 @@ public class RelationalEntityWithAIKey {
 
     private String value;
 
+    @Builder
+    public RelationalEntityWithAIKey(String key, String value) {
+        this.key = key;
+        this.value = value;
+    }
 }
