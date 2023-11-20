@@ -107,6 +107,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private final List<TransactionObserver> observers = new ArrayList<>();
 
+    private final List<Class<?>> entities;
+
     private TransactionObserver rootObserver;
 
     protected DBShardingBundleBase(
@@ -115,16 +117,18 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             Class<?>... entities) {
         this.dbNamespace = dbNamespace;
         val inEntities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
+        this.entities = inEntities;
         init(inEntities);
     }
 
     protected DBShardingBundleBase(String dbNamespace, List<String> classPathPrefixList) {
         this.dbNamespace = dbNamespace;
-        Set<Class<?>> entities = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
-        Preconditions.checkArgument(!entities.isEmpty(),
+        Set<Class<?>> entitiesSet = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
+        Preconditions.checkArgument(!entitiesSet.isEmpty(),
                 String.format("No entity class found at %s",
                         String.join(",", classPathPrefixList)));
-        val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
+        val inEntities = ImmutableList.<Class<?>>builder().addAll(entitiesSet).build();
+        this.entities = inEntities;
         init(inEntities);
     }
 
@@ -134,6 +138,14 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected DBShardingBundleBase(String... classPathPrefixes) {
         this(DEFAULT_NAMESPACE, Arrays.asList(classPathPrefixes));
+    }
+
+    public List<Class<?>> getEntities() {
+        if(this.entities == null){
+            throw new RuntimeException(
+                    "db sharding bundle is not initialised !");
+        }
+        return this.entities;
     }
 
     protected abstract ShardManager createShardManager(int numShards, ShardBlacklistingStore blacklistingStore);
