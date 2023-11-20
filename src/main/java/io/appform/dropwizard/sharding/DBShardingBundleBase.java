@@ -142,8 +142,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     public List<Class<?>> getEntities() {
         if(this.entities == null){
-            throw new RuntimeException(
-                    "db sharding bundle is not initialised !");
+            throw new RuntimeException("DB sharding bundle is not initialised !");
         }
         return this.entities;
     }
