@@ -44,9 +44,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -311,5 +313,31 @@ public class RelationalDaoTest {
             while (!nextPtr.getResult().isEmpty());
             assertEquals(ids, receivedIds);
         }
+    }
+
+    @Test
+    public void testMultiShardRun() {
+        val ids = new HashSet<String>();
+        IntStream.range(1, 1_000)
+                .forEach(i -> {
+                    try {
+                        val id = Integer.toString(i);
+                        ids.add(id);
+                        relationalDao.save(UUID.randomUUID().toString(),
+                                           RelationalEntity.builder()
+                                                   .key(id)
+                                                   .value("abcd" + i)
+                                                   .build());
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        assertEquals(ids, relationalDao.run(DetachedCriteria.forClass(RelationalEntity.class))
+                .values()
+                .stream()
+                .flatMap(Collection::stream)
+                .map(v -> ((RelationalEntity)v).getKey())
+                .collect(Collectors.toSet()));
     }
 }

@@ -611,17 +611,12 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .boxed()
                 .collect(Collectors.toMap(Function.identity(), shardId -> {
                     final LookupDaoPriv dao = daos.get(shardId);
-                    try {
-                        return transactionExecutor.execute(dao.sessionFactory,
-                                                           true,
-                                                           dao::run,
-                                                           criteria,
-                                                           "run",
-                                                           shardId);
-                    }
-                    catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       dao::run,
+                                                       criteria,
+                                                       "run",
+                                                       shardId);
                 }));
         return translator.apply(output);
     }

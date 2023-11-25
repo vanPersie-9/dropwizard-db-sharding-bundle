@@ -41,10 +41,7 @@ import org.hibernate.query.Query;
 
 import javax.persistence.Id;
 import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -116,6 +113,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
         ScrollableResults scroll(ScrollParamPriv scrollDetails) {
             final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
             return criteria.scroll(ScrollMode.FORWARD_ONLY);
+        }
+
+        /**
+         * Run a query inside this shard and return the matching list.
+         *
+         * @param criteria selection criteria to be applied.
+         * @return List of elements or empty list if none found
+         */
+        @SuppressWarnings("rawtypes")
+        List run(DetachedCriteria criteria) {
+            return criteria.getExecutableCriteria(currentSession())
+                    .list();
         }
 
         long count(DetachedCriteria criteria) {
@@ -411,6 +420,41 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return update(shardId, dao.sessionFactory, dao, id, updater, true);
+    }
+
+    /**
+     * Run arbitrary read-only queries on all shards and return results.
+     *
+     * @param criteria The detached criteria. Typically, a grouping or counting query
+     * @return A map of shard vs result-list
+     */
+    @SuppressWarnings("rawtypes")
+    public Map<Integer, List> run(DetachedCriteria criteria) {
+        return run(criteria, Function.identity());
+    }
+
+
+    /**
+     * Run read-only queries on all shards and transform them into required types
+     *
+     * @param criteria   The detached criteria. Typically, a grouping or counting query
+     * @param translator A method to transform results to required type
+     * @param <U>        Return type
+     * @return Translated result
+     */
+    public <U> U run(DetachedCriteria criteria, Function<Map<Integer, List>, U> translator) {
+        val output = IntStream.range(0, daos.size())
+                .boxed()
+                .collect(Collectors.toMap(Function.identity(), shardId -> {
+                    final RelationalDaoPriv dao = daos.get(shardId);
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       dao::run,
+                                                       criteria,
+                                                       "run",
+                                                       shardId);
+                }));
+        return translator.apply(output);
     }
 
     public <U> U runInSession(String id, Function<Session, U> handler) {
