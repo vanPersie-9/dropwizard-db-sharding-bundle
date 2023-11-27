@@ -107,7 +107,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private final List<TransactionObserver> observers = new ArrayList<>();
 
-    private final List<Class<?>> entities;
+    private final List<Class<?>> initialisedEntities;
 
     private TransactionObserver rootObserver;
 
@@ -117,18 +117,18 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             Class<?>... entities) {
         this.dbNamespace = dbNamespace;
         val inEntities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
-        this.entities = inEntities;
+        this.initialisedEntities = inEntities;
         init(inEntities);
     }
 
     protected DBShardingBundleBase(String dbNamespace, List<String> classPathPrefixList) {
         this.dbNamespace = dbNamespace;
-        Set<Class<?>> entitiesSet = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
-        Preconditions.checkArgument(!entitiesSet.isEmpty(),
+        Set<Class<?>> entities = new Reflections(classPathPrefixList).getTypesAnnotatedWith(Entity.class);
+        Preconditions.checkArgument(!entities.isEmpty(),
                 String.format("No entity class found at %s",
                         String.join(",", classPathPrefixList)));
-        val inEntities = ImmutableList.<Class<?>>builder().addAll(entitiesSet).build();
-        this.entities = inEntities;
+        val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
+        this.initialisedEntities = inEntities;
         init(inEntities);
     }
 
@@ -140,11 +140,11 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         this(DEFAULT_NAMESPACE, Arrays.asList(classPathPrefixes));
     }
 
-    public List<Class<?>> getEntities() {
-        if(this.entities == null){
+    public List<Class<?>> getInitialisedEntities() {
+        if(this.initialisedEntities == null){
             throw new RuntimeException("DB sharding bundle is not initialised !");
         }
-        return this.entities;
+        return this.initialisedEntities;
     }
 
     protected abstract ShardManager createShardManager(int numShards, ShardBlacklistingStore blacklistingStore);
