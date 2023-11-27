@@ -344,7 +344,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     /**
      * Provides a scroll api for records across shards. This api will scroll down in ascending order of the
      * 'sortFieldName' field. Newly added records can be polled by passing the pointer repeatedly. If nothing new is
-     * available, it will return an empty in {@link ScrollResult#getResult()}.
+     * available, it will return an empty set of results.
      * If the passed pointer is null, it will return the first pageSize records with a pointer to be passed to get the
      * next pageSize set of records.
      * <p>
