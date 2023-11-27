@@ -149,7 +149,7 @@ The project dependencies are:
 <dependency>
     <groupId>io.appform.dropwizard.sharding</groupId>
     <artifactId>db-sharding-bundle</artifactId>
-    <version>2.0.28-9</version>
+    <version>2.1.10-1-SCROLL-RC1</version>
 </dependency>
 ```
 
