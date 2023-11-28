@@ -32,7 +32,6 @@ import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import lombok.var;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.LockMode;
