@@ -3,6 +3,7 @@ package io.appform.dropwizard.sharding.metrics;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import io.appform.dropwizard.sharding.dao.RelationalDao;
+import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
@@ -28,13 +29,16 @@ public class TransactionMetricObserverTest {
     public void testExecuteWhenMetricNotApplicable() {
         Mockito.doReturn(false).when(metricManager).isMetricApplicable(null);
         assertEquals(terminate(),
-                transactionMetricObserver.execute(TransactionExecutionContext.builder().build(), this::terminate));
+                transactionMetricObserver.execute(TransactionExecutionContext.builder()
+                    .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+                    .build(), this::terminate));
     }
 
     @Test
     public void testExecuteWithNoException() {
         val context = TransactionExecutionContext.builder()
-                .entityClass(RelationalDao.class)
+            .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+            .entityClass(RelationalDao.class)
                 .shardName("shard")
                 .daoClass(RelationalEntity.class)
                 .build();
@@ -73,7 +77,8 @@ public class TransactionMetricObserverTest {
     @Test
     public void testExecuteWithException() {
         val context = TransactionExecutionContext.builder()
-                .entityClass(RelationalDao.class)
+            .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+            .entityClass(RelationalDao.class)
                 .shardName("shard")
                 .daoClass(RelationalEntity.class)
                 .build();
@@ -126,7 +131,7 @@ public class TransactionMetricObserverTest {
 
         assertEquals(1, transactionMetricObserver.getDaoToOpTypeMetricCache().size());
         assertEquals(daoMetricData,
-                transactionMetricObserver.getDaoToOpTypeMetricCache().get(daoMetricPrefix).get(context.getOpType()));
+                transactionMetricObserver.getDaoToOpTypeMetricCache().get(daoMetricPrefix).get(context.getCommandName()));
     }
 
     private void validateMetrics(final MetricData entityMetricData,

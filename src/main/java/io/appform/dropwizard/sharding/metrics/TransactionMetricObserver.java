@@ -72,7 +72,7 @@ public class TransactionMetricObserver extends TransactionObserver {
             daoToOpTypeMetricCache.put(prefix, new HashMap<>());
             return prefix;
         });
-        val opType = context.getOpType();
+        val opType = context.getCommandName();
         return daoToOpTypeMetricCache.get(daoMetricPrefix).computeIfAbsent(opType,
                 key -> metricManager.getDaoOpMetricData(daoMetricPrefix, context));
     }

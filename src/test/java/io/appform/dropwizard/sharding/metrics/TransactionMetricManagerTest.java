@@ -3,6 +3,7 @@ package io.appform.dropwizard.sharding.metrics;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableSet;
 import io.appform.dropwizard.sharding.config.MetricConfig;
+import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
 import org.junit.jupiter.api.Test;
@@ -53,7 +54,8 @@ public class TransactionMetricManagerTest {
         val metricManager = new TransactionMetricManager(null, metricRegistry);
         val metricPrefix = "test";
         val context = TransactionExecutionContext.builder()
-                .opType("save")
+                .commandName("save")
+                .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
                 .build();
         val metricData = metricManager.getDaoOpMetricData(metricPrefix, context);
         val metrics = metricRegistry.getMetrics();
@@ -70,7 +72,8 @@ public class TransactionMetricManagerTest {
         val metricManager = new TransactionMetricManager(null, metricRegistry);
         val metricPrefix = "test";
         val context = TransactionExecutionContext.builder()
-                .opType("save")
+                .commandName("save")
+                .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
                 .lockedContextMode("read")
                 .build();
         val metricData = metricManager.getDaoOpMetricData(metricPrefix, context);
