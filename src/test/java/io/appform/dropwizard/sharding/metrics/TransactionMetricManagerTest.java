@@ -3,7 +3,9 @@ package io.appform.dropwizard.sharding.metrics;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableSet;
 import io.appform.dropwizard.sharding.config.MetricConfig;
+import io.appform.dropwizard.sharding.dao.LockedContext.Mode;
 import io.appform.dropwizard.sharding.dao.operations.Save;
+import io.appform.dropwizard.sharding.dao.operations.lockedcontext.LockAndExecute;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import lombok.val;
 import org.junit.jupiter.api.Test;
@@ -73,16 +75,15 @@ public class TransactionMetricManagerTest {
         val metricPrefix = "test";
         val context = TransactionExecutionContext.builder()
                 .commandName("save")
-                .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
-                .lockedContextMode("read")
+                .opContext(LockAndExecute.<String>builder().mode(Mode.READ).entity("dummy").saver(t->t).build())
                 .build();
         val metricData = metricManager.getDaoOpMetricData(metricPrefix, context);
         val metrics = metricRegistry.getMetrics();
         assertEquals(4, metrics.size());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.latency"), metricData.getTimer());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.total"), metricData.getTotal());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.success"), metricData.getSuccess());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.failed"), metricData.getFailed());
+        assertEquals(metrics.get(metricPrefix + "." + "save.READ.latency"), metricData.getTimer());
+        assertEquals(metrics.get(metricPrefix + "." + "save.READ.total"), metricData.getTotal());
+        assertEquals(metrics.get(metricPrefix + "." + "save.READ.success"), metricData.getSuccess());
+        assertEquals(metrics.get(metricPrefix + "." + "save.READ.failed"), metricData.getFailed());
     }
 
     @Test

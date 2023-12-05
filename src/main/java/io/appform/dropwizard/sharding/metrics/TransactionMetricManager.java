@@ -58,7 +58,7 @@ public class TransactionMetricManager {
                 .append(normalizeString(context.getCommandName()));
         if (context.getOpContext() instanceof LockAndExecute
             && !Strings.isNullOrEmpty(((LockAndExecute)context.getOpContext()).getMode().name())) {
-            metricBuilder.append(DELIMITER).append(context.getLockedContextMode());
+            metricBuilder.append(DELIMITER).append(normalizeString(((LockAndExecute)context.getOpContext()).getMode().name()));
         }
         return getMetricData(metricBuilder.toString());
     }

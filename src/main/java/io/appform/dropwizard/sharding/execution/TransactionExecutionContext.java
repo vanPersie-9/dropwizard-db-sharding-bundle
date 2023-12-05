@@ -12,7 +12,6 @@ public class TransactionExecutionContext {
     String shardName;
     Class<?> daoClass;
     Class<?> entityClass;
-    String lockedContextMode;
 
     @NonNull
     OpContext<?> opContext;
