@@ -61,4 +61,9 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
   public @NonNull OpType getOpType() {
     return OpType.CREATE_OR_UPDATE;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

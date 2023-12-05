@@ -34,4 +34,9 @@ public class GetAndUpdateByLookupKey<T> extends OpContext<Boolean> {
   public @NonNull OpType getOpType() {
     return OpType.GET_AND_UPDATE;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

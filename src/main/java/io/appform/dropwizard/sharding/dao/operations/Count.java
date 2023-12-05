@@ -26,4 +26,9 @@ public class Count extends OpContext<Long> {
   public @NonNull OpType getOpType() {
     return OpType.COUNT;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

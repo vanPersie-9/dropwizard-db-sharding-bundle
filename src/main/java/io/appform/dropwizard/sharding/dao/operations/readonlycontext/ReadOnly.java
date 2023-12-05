@@ -32,4 +32,9 @@ public class ReadOnly<T> extends OpContext<T> {
   public @NonNull OpType getOpType() {
     return OpType.READ_ONLY;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

@@ -28,4 +28,9 @@ public class SaveAll<T> extends OpContext<Boolean> {
   public @NonNull OpType getOpType() {
     return OpType.SAVE_ALL;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

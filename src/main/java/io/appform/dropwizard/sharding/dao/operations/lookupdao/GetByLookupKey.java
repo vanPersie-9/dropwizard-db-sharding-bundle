@@ -36,4 +36,9 @@ public class GetByLookupKey<T, R> extends OpContext<R> {
   public @NonNull OpType getOpType() {
     return OpType.GET_BY_LOOKUP_KEY;
   }
+
+  @Override
+  public <R1> R1 visit(OpContextVisitor<R1> visitor) {
+    return visitor.visit(this);
+  }
 }

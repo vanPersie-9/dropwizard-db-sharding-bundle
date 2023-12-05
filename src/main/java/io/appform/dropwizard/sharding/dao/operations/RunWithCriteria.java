@@ -27,4 +27,9 @@ public class RunWithCriteria<T> extends OpContext<T> {
   public @NonNull OpType getOpType() {
     return OpType.RUN;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

@@ -10,7 +10,7 @@ import org.hibernate.Session;
 
 @Data
 @SuperBuilder
-public class DeleteByLookupKey<T> extends OpContext<Boolean> {
+public class DeleteByLookupKey extends OpContext<Boolean> {
 
   @NonNull
   private Function<String, Boolean> handler;
@@ -25,5 +25,10 @@ public class DeleteByLookupKey<T> extends OpContext<Boolean> {
   @Override
   public @NonNull OpType getOpType() {
     return OpType.DELETE_BY_LOOKUP_KEY;
+  }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
   }
 }

@@ -31,4 +31,9 @@ public class Save<T, R> extends OpContext<R> {
   public @NonNull OpType getOpType() {
     return OpType.SAVE;
   }
+
+  @Override
+  public <R1> R1 visit(OpContextVisitor<R1> visitor) {
+    return visitor.visit(this);
+  }
 }

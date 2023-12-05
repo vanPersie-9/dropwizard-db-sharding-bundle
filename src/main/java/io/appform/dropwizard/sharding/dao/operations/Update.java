@@ -58,4 +58,9 @@ public class Update<T> extends OpContext<Boolean> {
   public @NonNull OpType getOpType() {
     return OpType.UPDATE;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

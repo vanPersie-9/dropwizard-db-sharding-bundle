@@ -43,4 +43,9 @@ public class SelectAndUpdate<T> extends OpContext<Boolean> {
   public @NonNull OpType getOpType() {
     return OpType.SELECT_AND_UPDATE;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

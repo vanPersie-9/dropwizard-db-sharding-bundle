@@ -39,4 +39,9 @@ public class Select<T, R> extends OpContext<R> {
   public @NonNull OpType getOpType() {
     return OpType.SELECT;
   }
+
+  @Override
+  public <R1> R1 visit(OpContextVisitor<R1> visitor) {
+    return visitor.visit(this);
+  }
 }

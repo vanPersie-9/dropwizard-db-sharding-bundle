@@ -52,4 +52,9 @@ public class CreateOrUpdate<T> extends OpContext<T> {
   public @NonNull OpType getOpType() {
     return OpType.CREATE_OR_UPDATE;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

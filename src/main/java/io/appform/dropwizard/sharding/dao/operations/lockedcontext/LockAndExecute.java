@@ -49,4 +49,9 @@ public class LockAndExecute<T> extends OpContext<T> {
     }
     return result;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }

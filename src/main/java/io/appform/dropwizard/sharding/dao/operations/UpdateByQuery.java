@@ -27,4 +27,9 @@ public class UpdateByQuery<T> extends OpContext<Integer> {
   public @NonNull OpType getOpType() {
     return OpType.UPDATE_BY_QUERY;
   }
+
+  @Override
+  public <R> R visit(OpContextVisitor<R> visitor) {
+    return visitor.visit(this);
+  }
 }
