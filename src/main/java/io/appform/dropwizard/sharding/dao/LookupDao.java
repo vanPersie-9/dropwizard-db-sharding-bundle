@@ -626,15 +626,10 @@ public class LookupDao<T> implements ShardedDao<T> {
                     final LookupDaoPriv dao = daos.get(shardId);
                     OpContext<List<T>> opContext = RunWithCriteria.<List<T>>builder()
                         .handler(dao::run).detachedCriteria(criteria).build();
-                    try {
-                        return transactionExecutor.execute(dao.sessionFactory,
-                                                           true, "run",
-                                                           opContext,
-                                                           shardId);
-                    }
-                    catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
+                    return transactionExecutor.execute(dao.sessionFactory,
+                        true, "run",
+                        opContext,
+                        shardId);
                 }));
         return translator.apply(output);
     }

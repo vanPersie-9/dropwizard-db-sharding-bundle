@@ -3,6 +3,8 @@ package io.appform.dropwizard.sharding.dao.operations.relationaldao;
 import com.google.common.base.Preconditions;
 import io.appform.dropwizard.sharding.dao.operations.OpContext;
 import io.appform.dropwizard.sharding.dao.operations.OpType;
+import io.appform.dropwizard.sharding.dao.operations.SelectParam;
+import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -10,7 +12,6 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
-import org.hibernate.criterion.DetachedCriteria;
 
 @Data
 @SuperBuilder
@@ -19,13 +20,13 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
   @NonNull
   private U lockedEntity;
   @NonNull
-  private DetachedCriteria criteria;
+  private SelectParam selectParam;
   @NonNull
   private UnaryOperator<T> mutator;
   @NonNull
   private Function<U, T> entityGenerator;
   @NonNull
-  private Function<DetachedCriteria, T> getter;
+  private Function<SelectParam, List<T>> selector;
   @NonNull
   private Function<T, T> saver;
   @NonNull
@@ -33,9 +34,8 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
 
   @Override
   public Boolean apply(Session session) {
-    T entity = getter.apply(criteria);
-
-    if (entity == null) {
+    List<T> entityList = selector.apply(selectParam);
+    if (entityList == null || entityList.isEmpty()) {
       Preconditions.checkNotNull(entityGenerator, "Entity generator " + "can't be " + "null");
       final T newEntity = entityGenerator.apply(lockedEntity);
       Preconditions.checkNotNull(newEntity, "Generated entity " + "can't be " + "null");
@@ -43,7 +43,7 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
       return true;
     }
 
-    final T oldEntity = entity;
+    final T oldEntity = entityList.get(0);
     if (null == oldEntity) {
       return false;
     }
@@ -53,8 +53,6 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
     }
     updater.accept(oldEntity, newEntity);
     return true;
-
-
   }
 
   @Override

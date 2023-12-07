@@ -18,8 +18,11 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
+import io.appform.dropwizard.sharding.dao.operations.OpContext;
 import io.appform.dropwizard.sharding.dao.operations.Run;
+import io.appform.dropwizard.sharding.dao.operations.RunWithCriteria;
 import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.operations.SelectAndUpdate;
 import io.appform.dropwizard.sharding.dao.operations.UpdateByQuery;
@@ -36,23 +39,27 @@ import io.appform.dropwizard.sharding.dao.operations.Update;
 import io.appform.dropwizard.sharding.dao.operations.UpdateWithScroll;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.scroll.FieldComparator;
+import io.appform.dropwizard.sharding.scroll.ScrollPointer;
+import io.appform.dropwizard.sharding.scroll.ScrollResult;
+import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
+import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.dropwizard.hibernate.AbstractDAO;
-import lombok.Getter;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
-import lombok.val;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.hibernate.*;
 import org.hibernate.criterion.DetachedCriteria;
+import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 
 import javax.persistence.Id;
 import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -128,6 +135,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
         ScrollableResults scroll(ScrollParam scrollDetails) {
             final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
             return criteria.scroll(ScrollMode.FORWARD_ONLY);
+        }
+
+        /**
+         * Run a query inside this shard and return the matching list.
+         *
+         * @param criteria selection criteria to be applied.
+         * @return List of elements or empty list if none found
+         */
+        @SuppressWarnings("rawtypes")
+        List run(DetachedCriteria criteria) {
+            return criteria.getExecutableCriteria(currentSession())
+                    .list();
         }
 
         long count(DetachedCriteria criteria) {
@@ -298,7 +317,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
             LookupDao.ReadOnlyContext<U> context,
             DetachedCriteria criteria,
             int first,
-            int numResults) throws Exception {
+            int numResults) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         val opContext = Select.<T, List<T>>builder()
             .getter(dao::select)
@@ -308,10 +327,121 @@ public class RelationalDao<T> implements ShardedDao<T> {
         return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId());
     }
 
+    /**
+     * Provides a scroll api for records across shards. This api will scroll down in ascending order of the
+     * 'sortFieldName' field. Newly added records can be polled by passing the pointer repeatedly. If nothing new is
+     * available, it will return an empty in {@link ScrollResult#getResult()}.
+     * If the passed pointer is null, it will return the first pageSize records with a pointer to be passed to get the
+     * next pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll down
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    public ScrollResult<T> scrollDown(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        log.debug("SCROLL POINTER: {}", inPointer);
+        val pointer = inPointer == null ? new ScrollPointer(ScrollPointer.Direction.DOWN) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.DOWN),
+                                    "A down scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.asc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollDown");
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll up in descending order of the
+     * 'sortFieldName' field.
+     * As this api goes back in order, newly added records will not be available in the scroll.
+     * If the passed pointer is null, it will return the last pageSize records with a pointer to be passed to get the
+     * previous pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll up
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    @SneakyThrows
+    public ScrollResult<T> scrollUp(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        val pointer = null == inPointer ? new ScrollPointer(ScrollPointer.Direction.UP) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.UP),
+                                    "An up scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.desc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .reversed()
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollUp");
+    }
+    
     public boolean update(String parentKey, Object id, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return update(shardId, dao.sessionFactory, dao, id, updater, true);
+    }
+
+    /**
+     * Run arbitrary read-only queries on all shards and return results.
+     *
+     * @param criteria The detached criteria. Typically, a grouping or counting query
+     * @return A map of shard vs result-list
+     */
+    @SuppressWarnings("rawtypes")
+    public Map<Integer, List> run(DetachedCriteria criteria) {
+        return run(criteria, Function.identity());
+    }
+
+
+    /**
+     * Run read-only queries on all shards and transform them into required types
+     *
+     * @param criteria   The detached criteria. Typically, a grouping or counting query
+     * @param translator A method to transform results to required type
+     * @param <U>        Return type
+     * @return Translated result
+     */
+    public <U> U run(DetachedCriteria criteria, Function<Map<Integer, List>, U> translator) {
+        val output = IntStream.range(0, daos.size())
+                .boxed()
+                .collect(Collectors.toMap(Function.identity(), shardId -> {
+                    final RelationalDaoPriv dao = daos.get(shardId);
+                    OpContext<List> opContext = RunWithCriteria.<List>builder()
+                        .detachedCriteria(criteria).handler(dao::run).build();
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       "run",
+                                                        opContext,
+                                                        shardId);
+                }));
+        return translator.apply(output);
     }
 
     public <U> U runInSession(String id, Function<Session, U> handler) {
@@ -394,14 +524,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria),
-                entityClass, shardInfoProvider, observer);
+                                    entityClass, shardInfoProvider, observer);
     }
 
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         return new LockedContext<T>(shardId, dao.sessionFactory, dao::save, entity,
-                entityClass, shardInfoProvider, observer);
+                                    entityClass, shardInfoProvider, observer);
     }
 
     <U> boolean createOrUpdate(
@@ -411,10 +541,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
         U parent,
         Function<U, T> entityGenerator) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
+        final SelectParam selectParam = SelectParam.builder()
+            .criteria(criteria)
+            .start(0)
+            .numRows(1)
+            .build();
+
         val opContext = CreateOrUpdateInLockedContext.<T, U>builder()
             .lockedEntity(parent)
-            .getter(dao::get)
-            .criteria(criteria)
+            .selector(dao::select)
+            .selectParam(selectParam)
             .entityGenerator(entityGenerator)
             .saver(dao::save)
             .mutator(updater)
@@ -470,8 +606,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
             int numResults,
             Function<List<T>, U> handler) throws Exception {
 
-            int shardId = shardCalculator.shardId(parentKey);
-            RelationalDaoPriv dao = daos.get(shardId);
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
         val opContext = Select.<T, U>builder()
             .getter(dao::select)
             .criteria(criteria)
@@ -480,87 +616,121 @@ public class RelationalDao<T> implements ShardedDao<T> {
             .afterSelect(handler).build();
 
         return transactionExecutor.execute(dao.sessionFactory,
-                                               true,
-                                             "select",
-                                             opContext,
-                                               shardId);
-        }
-
-        public long count (String parentKey, DetachedCriteria criteria){
-            int shardId = shardCalculator.shardId(parentKey);
-            RelationalDaoPriv dao = daos.get(shardId);
-            val opContext = Count.builder().counter(dao::count).criteria(criteria).build();
-            return transactionExecutor.<Long>execute(dao.sessionFactory,
-                                                                       true,
-                "count", opContext,
-                                                                       shardId);
-        }
-
-
-        public boolean exists (String parentKey, Object key){
-            int shardId = shardCalculator.shardId(parentKey);
-            RelationalDaoPriv dao = daos.get(shardId);
-            val opContext = Get.<T, T>builder()
-                .criteria(dao.getDetachedCriteria(key))
-                .getter(dao::get).build();
-            Optional<T>
-                result = Optional.ofNullable(transactionExecutor.execute(dao.sessionFactory,
-                                                                                  true,
-                                                                                  "exists",
-                                                                                  opContext,
-                                                                                  shardId));
-            return result.isPresent();
-        }
-
-        /**
-         * Queries using the specified criteria across all shards and returns the counts of rows satisfying
-         * the criteria.
-         * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
-         *
-         * @param criteria The select criteria
-         * @return List of counts in each shard
-         */
-        public List<Long> countScatterGather (DetachedCriteria criteria){
-
-            return IntStream.range(0, daos.size())
-                    .mapToObj(shardId -> {
-                        val dao = daos.get(shardId);
-                        try {
-                            val opContext = Count.builder()
-                                .counter(dao::count).criteria(criteria).build();
-                            return transactionExecutor.execute(dao.sessionFactory, true,
-                                "countScatterGather", opContext, shardId);
-                        }
-                        catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }).collect(Collectors.toList());
-        }
-
-        public List<T> scatterGather (DetachedCriteria criteria,int start, int numRows){
-            return IntStream.range(0, daos.size())
-                    .mapToObj(shardId -> {
-                        val dao = daos.get(shardId);
-                        try {
-                            val opContext = Select.<T, List<T>>builder()
-                                .getter(dao::select)
-                                .criteria(criteria)
-                                .start(start)
-                                .numRows(numRows).build();
-                            return transactionExecutor.execute(dao.sessionFactory,
-                                                               true,
-                                                               "scatterGather",
-                                                               opContext,
-                                                               shardId);
-                        }
-                        catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }).flatMap(Collection::stream).collect(Collectors.toList());
-        }
-
-        protected Field getKeyField () {
-            return this.keyField;
-        }
-
+            true,
+            "select",
+            opContext,
+            shardId);
     }
+
+    public long count (String parentKey, DetachedCriteria criteria){
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
+        val opContext = Count.builder().counter(dao::count).criteria(criteria).build();
+        return transactionExecutor.<Long>execute(dao.sessionFactory,
+            true,
+            "count", opContext,
+            shardId);
+    }
+
+    public boolean exists (String parentKey, Object key){
+        int shardId = shardCalculator.shardId(parentKey);
+        RelationalDaoPriv dao = daos.get(shardId);
+        val opContext = Get.<T, T>builder()
+            .criteria(dao.getDetachedCriteria(key))
+            .getter(dao::get).build();
+        Optional<T>
+            result = Optional.ofNullable(transactionExecutor.execute(dao.sessionFactory,
+            true,
+            "exists",
+            opContext,
+            shardId));
+        return result.isPresent();
+    }
+
+    /**
+     * Queries using the specified criteria across all shards and returns the counts of rows satisfying
+     * the criteria.
+     * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
+     *
+     * @param criteria The select criteria
+     * @return List of counts in each shard
+     */
+    public List<Long> countScatterGather (DetachedCriteria criteria){
+
+        return IntStream.range(0, daos.size())
+            .mapToObj(shardId -> {
+                val dao = daos.get(shardId);
+                try {
+                    val opContext = Count.builder()
+                        .counter(dao::count).criteria(criteria).build();
+                    return transactionExecutor.execute(dao.sessionFactory, true,
+                        "countScatterGather", opContext, shardId);
+                }
+                catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }).collect(Collectors.toList());
+    }
+
+    public List<T> scatterGather (DetachedCriteria criteria,int start, int numRows){
+        return IntStream.range(0, daos.size())
+            .mapToObj(shardId -> {
+                val dao = daos.get(shardId);
+                try {
+                    val opContext = Select.<T, List<T>>builder()
+                        .getter(dao::select)
+                        .criteria(criteria)
+                        .start(start)
+                        .numRows(numRows).build();
+                    return transactionExecutor.execute(dao.sessionFactory,
+                        true,
+                        "scatterGather",
+                        opContext,
+                        shardId);
+                }
+                catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    protected Field getKeyField() {
+        return this.keyField;
+    }
+
+    @SneakyThrows
+    private ScrollResult<T> scrollImpl(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer pointer,
+            final int pageSize,
+            final UnaryOperator<DetachedCriteria> criteriaMutator,
+            final Comparator<ScrollResultItem<T>> comparator,
+            String methodName) {
+        val daoIndex = new AtomicInteger();
+        val results = daos.stream()
+                .flatMap(dao -> {
+                    val currIdx = daoIndex.getAndIncrement();
+                    val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
+                    val opContext = Select.<T, List<T>>builder()
+                        .getter(dao::select)
+                        .start(pointer.getCurrOffset(currIdx))
+                        .numRows(pageSize)
+                        .criteria(criteria).build();
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                        methodName, opContext, currIdx)
+                            .stream()
+                            .map(item -> new ScrollResultItem<>(item, currIdx));
+                })
+                .sorted(comparator)
+                .limit(pageSize)
+                .collect(Collectors.toList());
+        //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
+        val outputBuilder = ImmutableList.<T>builder();
+        results.forEach(result -> {
+            outputBuilder.add(result.getData());
+            pointer.advance(result.getShardIdx(), 1);// will get advanced
+        });
+        return new ScrollResult<>(pointer, outputBuilder.build());
+    }
+}
