@@ -42,38 +42,29 @@ public class TransactionMetricManager {
                 && metricConfig.getEnabledForEntities().contains(entityClass.getCanonicalName());
     }
 
-    public String getDaoMetricPrefix(final Class<?> daoClass) {
-        return METRIC_PREFIX + DELIMITER
-                + "operation"
-                + DELIMITER
-                + normalizeString(daoClass.getCanonicalName());
-    }
-
-    public MetricData getDaoOpMetricData(final String metricPrefix,
-                                         final TransactionExecutionContext context) {
-        val metricBuilder = new StringBuilder(metricPrefix)
-                .append(DELIMITER)
-                .append(normalizeString(context.getOpType()));
-        if (!Strings.isNullOrEmpty(context.getLockedContextMode())) {
-            metricBuilder.append(DELIMITER).append(context.getLockedContextMode());
-        }
-        return getMetricData(metricBuilder.toString());
-    }
-
     public MetricData getShardMetricData(final String shardName) {
-        val metricPrefix = METRIC_PREFIX + DELIMITER
-                + "shard"
-                + DELIMITER
-                + normalizeString(shardName);
+        val metricPrefix = getMetricPrefix("shard", shardName);
         return getMetricData(metricPrefix);
     }
 
-    public MetricData getEntityMetricData(final Class<?> entityClass) {
-        val metricPrefix = METRIC_PREFIX + DELIMITER
-                + "entity"
-                + DELIMITER
-                + normalizeString(entityClass.getCanonicalName());
+    public MetricData getEntityOpMetricData(final TransactionExecutionContext context) {
+        val metricPrefix = getMetricPrefix("entity", context.getEntityClass().getCanonicalName(),
+                context.getDaoClass().getCanonicalName(),
+                context.getOpType(),
+                context.getLockedContextMode());
         return getMetricData(metricPrefix);
+    }
+
+    private String getMetricPrefix(String... metricNames) {
+        val metricPrefix = new StringBuilder(METRIC_PREFIX);
+        for (val metricName : metricNames) {
+            if (Strings.isNullOrEmpty(metricName)) {
+                continue;
+            }
+            metricPrefix.append(DELIMITER)
+                    .append(normalizeString(metricName));
+        }
+        return metricPrefix.toString();
     }
 
     private MetricData getMetricData(final String metricPrefix) {
