@@ -379,7 +379,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         //Observer chain starts with filters and ends with listener invocations
         //Terminal observer calls the actual method
         rootObserver = new ListenerTriggeringObserver(new TerminalTransactionObserver()).addListeners(listeners);
-        for (TransactionObserver observer : observers) {
+        for (var observer : observers) {
             if (null == observer) {
                 return;
             }
