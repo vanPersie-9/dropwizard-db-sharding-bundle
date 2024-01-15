@@ -46,6 +46,7 @@ import javax.validation.constraints.NotNull;
         @NamedQuery(name = "testTextUpdateQuery", query = "update TestEntity set text = :text where externalId =:externalId")})
 
 public class TestEntity {
+
     @Id
     @NotNull
     @NotEmpty
