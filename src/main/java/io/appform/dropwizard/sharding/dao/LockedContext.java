@@ -105,7 +105,6 @@ public class LockedContext<T> {
     /**
      * Applies a mutation operation to the current context using a provided mutator.
      *
-     * @param <T> The type parameter representing the parent entity.
      * @param mutator The mutator responsible for applying the mutation operation to the context.
      * @return A reference to this LockedContext, enabling method chaining.
      *
@@ -116,7 +115,7 @@ public class LockedContext<T> {
      *
      * <p>
      * The {@code mutator} parameter represents an instance of a {@link Mutator} interface, which defines the
-     * mutation logic to be executed on the context. The {@link Mutator#mutate(LockedContext)} method of the
+     * mutation logic to be executed on the context. The {@link Mutator#mutator(Object)} )} method of the
      * mutator is invoked, allowing custom mutations to be performed on the context.
      * </p>
      *
@@ -139,7 +138,6 @@ public class LockedContext<T> {
      * The handler function is provided as a {@code Function}
      * The handler is added to a list of operations to be executed within the locked context.
      *
-     * @param <T> The type parameter representing the parent entity.
      * @param handler The handler function to apply to the current entity.
      * @return A locked context for the current entity type, allowing for further chained operations within a locked transaction.
      */
@@ -359,7 +357,7 @@ public class LockedContext<T> {
      *                        It takes an existing entity as input and returns the updated entity.
      * @param entityGenerator A supplier function that provides a new entity to be created if the entity
      *                        specified by the query specification does not exist.
-     * @return A LockedContext<T> representing the result of the create or update operation.
+     * @return A LockedContext representing the result of the create or update operation.
      * @throws RuntimeException If an exception occurs during the create or update operation, it is wrapped
      *                          in a RuntimeException and thrown.
      */
@@ -395,7 +393,7 @@ public class LockedContext<T> {
      *                      matching entity. If this supplier returns true, the update operation
      *                      continues to the next matching entity; if it returns false, the operation
      *                      stops.
-     * @return A LockedContext<T> representing the result of the update operation
+     * @return A LockedContext representing the result of the update operation
      * @throws RuntimeException If an exception occurs during the update operation, it is wrapped
      *                          in a RuntimeException and thrown.
      */
@@ -431,7 +429,7 @@ public class LockedContext<T> {
      *                      matching entity. If this supplier returns true, the update operation
      *                      continues to the next matching entity; if it returns false, the operation
      *                      stops.
-     * @return A LockedContext<T> representing the result of the update operation.
+     * @return A LockedContext representing the result of the update operation.
      * @throws RuntimeException If an exception occurs during the update operation, it is wrapped
      *                          in a RuntimeException and thrown.
      */

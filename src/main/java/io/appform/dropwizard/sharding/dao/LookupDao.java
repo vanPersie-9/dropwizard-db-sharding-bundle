@@ -26,7 +26,6 @@ import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
-import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.dropwizard.hibernate.AbstractDAO;
@@ -947,14 +946,13 @@ public class LookupDao<T> implements ShardedDao<T> {
          * and, if the filter condition is met, executes a query to retrieve related child entities.
          * The retrieved child entities are then passed to a consumer function for further processing </p>
          *
-         * @param <U> The type of the result expected from the query.
-         * @param relationalDao A RelationalDao<U> representing the DAO for retrieving child entities.
-         * @param querySpec     A QuerySpec<U, U> specifying the criteria for selecting child entities.
+         * @param relationalDao A RelationalDao representing the DAO for retrieving child entities.
+         * @param querySpec     A QuerySpec specifying the criteria for selecting child entities.
          * @param first         The index of the first result to retrieve (pagination).
          * @param numResults    The number of child entities to retrieve (pagination).
-         * @param consumer      A BiConsumer<T, List<U>> for processing the parent entity and its child entities.
-         * @param filter        A Predicate<T> for filtering parent entities to decide whether to process them.
-         * @return A ReadOnlyContext<T> representing the current context.
+         * @param consumer      A BiConsumer for processing the parent entity and its child entities.
+         * @param filter        A Predicate for filtering parent entities to decide whether to process them.
+         * @return A ReadOnlyContext representing the current context.
          * @throws RuntimeException If any exception occurs during the execution of the query or processing
          *                          of the parent and child entities.
          */

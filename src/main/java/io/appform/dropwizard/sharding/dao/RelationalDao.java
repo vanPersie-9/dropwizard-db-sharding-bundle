@@ -637,7 +637,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * @param parentKey A string representing the parent key that determines the shard for
      *                  acquiring the write lock.
      * @param querySpec A QuerySpec object specifying the criteria for selecting entities to lock.
-     * @return A LockedContext<T> object containing shard information and the locked entities,
+     * @return A LockedContext object containing shard information and the locked entities,
      *         enabling further operations on the locked entities within the specified shard.
      */
     public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T, T> querySpec) {
@@ -658,7 +658,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * @param parentKey A string representing the parent key that determines the shard for
      *                  saving the entity.
      * @param entity The entity of type T to be saved.
-     * @return A LockedContext<T> object containing shard information and the saved entity,
+     * @return A LockedContext object containing shard information and the saved entity,
      *         enabling further operations on the entity within the specified shard.
      */
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
