@@ -675,7 +675,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .boxed()
                 .collect(Collectors.toMap(Function.identity(), shardId -> {
                     final LookupDaoPriv dao = daos.get(shardId);
-                    val opContext = RunInSession.<U>builder()
+                    RunInSession<U> opContext = RunInSession.<U>builder()
                         .handler(currSession -> sessionHandler.apply(shardId, currSession)).build();
                     try {
                         return transactionExecutor.execute(dao.sessionFactory,
