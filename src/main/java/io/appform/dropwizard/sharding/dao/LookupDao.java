@@ -23,11 +23,11 @@ import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.operations.Get;
 import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdate;
+import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdateByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.DeleteByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetAndUpdateByLookupKey;
-import io.appform.dropwizard.sharding.dao.operations.Run;
+import io.appform.dropwizard.sharding.dao.operations.RunInSession;
 import io.appform.dropwizard.sharding.dao.operations.RunWithCriteria;
 import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.operations.UpdateByQuery;
@@ -369,7 +369,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         Supplier<T> entityGenerator) {
         val shardId = shardCalculator.shardId(id);
         val dao = daos.get(shardId);
-        val opContext = CreateOrUpdate.<T>builder()
+        val opContext = CreateOrUpdateByLookupKey.<T>builder()
             .id(id)
             .getLockedForWrite(dao::getLockedForWrite)
             .entityGenerator(entityGenerator)
@@ -664,7 +664,7 @@ public class LookupDao<T> implements ShardedDao<T> {
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
-        val opContext = Run.<U>builder().handler(handler).build();
+        val opContext = RunInSession.<U>builder().handler(handler).build();
         return transactionExecutor.execute(dao.sessionFactory, true, "runInSession", opContext, shardId);
     }
 
@@ -675,7 +675,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .boxed()
                 .collect(Collectors.toMap(Function.identity(), shardId -> {
                     final LookupDaoPriv dao = daos.get(shardId);
-                    OpContext<U> opContext = Run.<U>builder()
+                    val opContext = RunInSession.<U>builder()
                         .handler(currSession -> sessionHandler.apply(shardId, currSession)).build();
                     try {
                         return transactionExecutor.execute(dao.sessionFactory,
@@ -806,7 +806,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                                                                                this.skipTransaction);
                 transactionHandler.beforeStart();
                 try {
-                    OpContext<T> opContext = ((ReadOnly<T>) executionContext.getOpContext());
+                    val opContext = ((ReadOnly<T>) executionContext.getOpContext());
                     return opContext.apply(transactionHandler.getSession());
                 }
                 catch (Exception e) {

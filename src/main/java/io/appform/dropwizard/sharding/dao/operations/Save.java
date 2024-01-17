@@ -1,7 +1,5 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.OpType;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import lombok.Builder;
@@ -10,6 +8,13 @@ import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ * Persists given entity to the DB.
+ * Optional afterSave function performed within the same hibernate session.
+ *
+ * @param <T> Type of entity to be saved.
+ * @param <R> Return type of the operation after performing any afterSave method.
+ */
 @Data
 @SuperBuilder
 public class Save<T, R> extends OpContext<R> {

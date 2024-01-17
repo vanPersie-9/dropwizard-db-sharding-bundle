@@ -1,7 +1,5 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.OpType;
 import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;

@@ -9,16 +9,21 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.Data;
+import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ * Acquires lock on an entity and perform all the operations given.
+ *
+ * @param <T> Entity type on which lock is being acquired.
+ */
 @Data
 @SuperBuilder
 public class LockAndExecute<T> extends OpContext<T> {
 
   private final List<Consumer<T>> operations = Lists.newArrayList();
   private final Mode mode;
-  private final OpType opType = OpType.LOCK_AND_EXECUTE;
   private Supplier<T> getter;
   private Function<T, T> saver;
   private T entity;
@@ -28,7 +33,7 @@ public class LockAndExecute<T> extends OpContext<T> {
     T result = generateEntity();
     operations
         .forEach(operation -> operation.accept(result));
-    return entity;
+    return result;
   }
 
   private T generateEntity() {
@@ -48,6 +53,11 @@ public class LockAndExecute<T> extends OpContext<T> {
 
     }
     return result;
+  }
+
+  @Override
+  public @NonNull OpType getOpType() {
+    return OpType.LOCK_AND_EXECUTE;
   }
 
   @Override

@@ -10,6 +10,12 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
 
+/**
+ * Get entities by criteria. Tterate over each result, mutate and persist to DB all within same
+ * session.
+ *
+ * @param <T> Type of entity being updated.
+ */
 @Data
 @SuperBuilder
 public class UpdateWithScroll<T> extends OpContext<Boolean> {

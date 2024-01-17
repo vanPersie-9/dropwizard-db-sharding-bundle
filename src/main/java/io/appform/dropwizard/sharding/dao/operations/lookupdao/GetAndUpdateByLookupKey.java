@@ -10,6 +10,12 @@ import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ * Get an entity from DB by lookup key, mutate it and persist it back to DB. All in same hibernate
+ * session.
+ *
+ * @param <T> Type of entity to get and update.
+ */
 @Data
 @SuperBuilder
 public class GetAndUpdateByLookupKey<T> extends OpContext<Boolean> {
@@ -32,7 +38,7 @@ public class GetAndUpdateByLookupKey<T> extends OpContext<Boolean> {
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.GET_AND_UPDATE;
+    return OpType.GET_AND_UPDATE_BY_LOOKUP_KEY;
   }
 
   @Override

@@ -13,6 +13,12 @@ import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ *  To be used along with LockAndExecute operation. Performs createOrUpdate on an entity after acquiring lock on parent entity.
+ *
+ * @param <T> Type of entity on which actual create or update is being performed.
+ * @param <U> Type of entity on which lock acquired by lockedcontext.
+ */
 @Data
 @SuperBuilder
 public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
@@ -57,7 +63,7 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.CREATE_OR_UPDATE;
+    return OpType.CREATE_OR_UPDATE_IN_LOCKED_CONTEXT;
   }
 
   @Override

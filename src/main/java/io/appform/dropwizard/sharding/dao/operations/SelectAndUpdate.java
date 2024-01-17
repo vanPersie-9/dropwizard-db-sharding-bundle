@@ -9,6 +9,12 @@ import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ * Get entity by criteria, mutate it and persist to DB. Using select instead of get so it does not
+ * fail in case of more than one result.
+ *
+ * @param <T> return type of the entity to be updated.
+ */
 @Data
 @SuperBuilder
 public class SelectAndUpdate<T> extends OpContext<Boolean> {

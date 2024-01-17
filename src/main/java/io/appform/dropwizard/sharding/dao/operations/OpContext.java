@@ -1,7 +1,7 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
 import io.appform.dropwizard.sharding.dao.operations.lockedcontext.LockAndExecute;
-import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdate;
+import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdateByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.DeleteByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetAndUpdateByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetByLookupKey;
@@ -44,15 +44,13 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
     <T> P visit(LockAndExecute<T> opContext);
 
-    <T> P visit(Update<T> opContext);
-
-    <T> P visit(UpdateByQuery<T> opContext);
+    <T> P visit(UpdateByQuery opContext);
 
     <T> P visit(UpdateWithScroll<T> opContext);
 
     <T> P visit(SelectAndUpdate<T> opContext);
 
-    <T> P visit(Run<T> opContext);
+    <T> P visit(RunInSession<T> opContext);
 
     <T> P visit(RunWithCriteria<T> opContext);
 
@@ -62,7 +60,7 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
     <T> P visit(SaveAll<T> opContext);
 
-    <T> P visit(CreateOrUpdate<T> opContext);
+    <T> P visit(CreateOrUpdateByLookupKey<T> opContext);
 
     <T> P visit(
         io.appform.dropwizard.sharding.dao.operations.relationaldao.CreateOrUpdate<T> opContext);

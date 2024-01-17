@@ -1,10 +1,6 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.OpType;
-import java.util.Optional;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +9,12 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
+/**
+ * Get an entity from DB, mutate it and persist it back to DB. All in same hibernate
+ * session.
+ *
+ * @param <T> Type of entity to get and update.
+ */
 @Data
 @SuperBuilder
 public class GetAndUpdate<T> extends OpContext<Boolean> {

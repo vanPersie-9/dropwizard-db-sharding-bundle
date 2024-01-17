@@ -21,7 +21,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.Run;
+import io.appform.dropwizard.sharding.dao.operations.RunInSession;
 import io.appform.dropwizard.sharding.dao.operations.RunWithCriteria;
 import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.operations.SelectAndUpdate;
@@ -35,7 +35,6 @@ import io.appform.dropwizard.sharding.dao.operations.SaveAll;
 import io.appform.dropwizard.sharding.dao.operations.ScrollParam;
 import io.appform.dropwizard.sharding.dao.operations.Select;
 import io.appform.dropwizard.sharding.dao.operations.SelectParam;
-import io.appform.dropwizard.sharding.dao.operations.Update;
 import io.appform.dropwizard.sharding.dao.operations.UpdateWithScroll;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
@@ -447,7 +446,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         RelationalDaoPriv dao = daos.get(shardId);
-        val opContext = Run.<U>builder().handler(handler).build();
+        val opContext = RunInSession.<U>builder().handler(handler).build();
         return transactionExecutor.
             execute(dao.sessionFactory, true, "runInSession", opContext, shardId);
     }
@@ -578,16 +577,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
-            val opContext = Update.<T>builder()
-                .criteria(criteria)
-                .start(start)
-                .numRows(numRows)
-                .getter(dao::select)
+            val opContext = SelectAndUpdate.<T>builder()
+                .selectParam(
+                    SelectParam.builder().criteria(criteria).start(start).numRows(numRows).build())
+                .selector(dao::select)
                 .mutator(updater)
                 .updater(dao::update).build();
             return transactionExecutor.<Boolean>execute(dao.sessionFactory, true, "updateAll",
-                                                                                  opContext,
-                                                                                  shardId);
+                opContext, shardId);
         }
         catch (Exception e) {
             throw new RuntimeException("Error updating entity with criteria: " + criteria, e);

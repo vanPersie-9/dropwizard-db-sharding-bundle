@@ -12,9 +12,15 @@ import lombok.experimental.SuperBuilder;
 import lombok.val;
 import org.hibernate.Session;
 
+/**
+ * Acquire lock on an entity by lookup key. If entity present, performs mutation and updates it.
+ * else creates the entity.
+ *
+ * @param <T> Type of entity on which operation being performed.
+ */
 @Data
 @SuperBuilder
-public class CreateOrUpdate<T> extends OpContext<T> {
+public class CreateOrUpdateByLookupKey<T> extends OpContext<T> {
 
   @NonNull
   private String id;
@@ -50,7 +56,7 @@ public class CreateOrUpdate<T> extends OpContext<T> {
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.CREATE_OR_UPDATE;
+    return OpType.CREATE_OR_UPDATE_BY_LOOKUP_KEY;
   }
 
   @Override

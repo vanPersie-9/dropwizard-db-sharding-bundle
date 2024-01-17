@@ -1,7 +1,5 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.OpType;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
@@ -9,6 +7,9 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
+/**
+ * Returns count of records matching given criteria for a shard.
+ */
 @Data
 @SuperBuilder
 public class Count extends OpContext<Long> {

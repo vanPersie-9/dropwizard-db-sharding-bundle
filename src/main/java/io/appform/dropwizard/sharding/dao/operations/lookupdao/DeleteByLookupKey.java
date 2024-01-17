@@ -8,6 +8,9 @@ import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
+/**
+ * Delete an entity by lookup Key.
+ */
 @Data
 @SuperBuilder
 public class DeleteByLookupKey extends OpContext<Boolean> {

@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import lombok.Getter;
+import lombok.val;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 
@@ -40,7 +41,7 @@ public class LockedContext<T> {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.observer = observer;
-        OpContext opContext = LockAndExecute.<T>builder().getter(getter).mode(Mode.READ).build();
+        val opContext = LockAndExecute.<T>builder().getter(getter).mode(Mode.READ).build();
         this.executionContext = buildExecutionContext(shardInfoProvider, entityClass, opContext);
     }
 
@@ -55,7 +56,7 @@ public class LockedContext<T> {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.observer = observer;
-        OpContext opContext = LockAndExecute.<T>builder().saver(saver).mode(Mode.INSERT)
+        val opContext = LockAndExecute.<T>builder().saver(saver).mode(Mode.INSERT)
             .entity(entity).build();
         this.executionContext = buildExecutionContext(shardInfoProvider, entityClass, opContext);
     }
@@ -69,8 +70,7 @@ public class LockedContext<T> {
         return apply(parent -> mutator.mutator(parent));
     }
 
-    public <U> LockedContext<T> save(RelationalDao<U> relationalDao,
-        Function<T, U> entityGenerator) {
+    public <U> LockedContext<T> save(RelationalDao<U> relationalDao, Function<T, U> entityGenerator) {
         return apply(parent -> {
             try {
                 U entity = entityGenerator.apply(parent);
@@ -86,7 +86,7 @@ public class LockedContext<T> {
             TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, false);
             transactionHandler.beforeStart();
             try {
-                OpContext<T> opContext = ((LockAndExecute<T>) executionContext.getOpContext());
+                val opContext = (LockAndExecute<T>) executionContext.getOpContext();
                return opContext.apply(transactionHandler.getSession());
             } catch (Exception e) {
                 transactionHandler.onError();

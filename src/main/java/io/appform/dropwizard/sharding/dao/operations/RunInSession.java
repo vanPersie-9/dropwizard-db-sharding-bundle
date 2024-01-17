@@ -1,17 +1,19 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.dao.operations.OpContext;
-import io.appform.dropwizard.sharding.dao.operations.OpType;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
-import org.hibernate.criterion.DetachedCriteria;
 
+/**
+ * Run any action within a session on specific shard.
+ *
+ * @param <T> return type of the given action.
+ */
 @Data
 @SuperBuilder
-public class Run<T> extends OpContext<T> {
+public class RunInSession<T> extends OpContext<T> {
 
   @NonNull
   Function<Session, T> handler;
@@ -23,7 +25,7 @@ public class Run<T> extends OpContext<T> {
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.RUN;
+    return OpType.RUN_IN_SESSION;
   }
 
   @Override
