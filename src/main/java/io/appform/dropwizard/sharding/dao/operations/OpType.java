@@ -6,6 +6,7 @@ public enum OpType {
   COUNT,
   SELECT,
   GET,
+  GET_BY_LOOKUP_KEY,
   READ_ONLY,
 
   // Write operations

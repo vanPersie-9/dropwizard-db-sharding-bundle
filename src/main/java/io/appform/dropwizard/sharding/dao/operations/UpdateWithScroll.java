@@ -11,7 +11,7 @@ import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
 
 /**
- * Get entities by criteria. Tterate over each result, mutate and persist to DB all within same
+ * Get entities by criteria. Iterate over each result, mutate and persist to DB all within same
  * session.
  *
  * @param <T> Type of entity being updated.

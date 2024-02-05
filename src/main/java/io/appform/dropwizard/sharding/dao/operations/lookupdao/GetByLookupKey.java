@@ -34,7 +34,7 @@ public class GetByLookupKey<T, R> extends OpContext<R> {
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.GET;
+    return OpType.GET_BY_LOOKUP_KEY;
   }
 
   @Override

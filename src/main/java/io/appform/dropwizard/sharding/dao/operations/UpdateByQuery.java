@@ -8,7 +8,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
- * Performs update operation with with names query and returns count of updations.
+ * Performs update operation with named query and returns count of updations.
  */
 @Data
 @SuperBuilder
