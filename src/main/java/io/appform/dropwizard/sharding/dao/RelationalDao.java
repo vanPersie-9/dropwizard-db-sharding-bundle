@@ -548,7 +548,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final Object key) {
-        return readOnlyExecutor(parentKey, key, null);
+        return readOnlyExecutor(parentKey, key, () -> false);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,

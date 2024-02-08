@@ -26,6 +26,7 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -157,7 +158,25 @@ public class RelationalReadOnlyLockedContextTest {
                 })
                 .execute()
                 .orElse(new ArrayList<>());
-        System.out.println(new ObjectMapper().writeValueAsString(dataList));
+
+        Assertions.assertNotNull(dataList);
+        Assertions.assertEquals(2, dataList.size());
+        val respCompanyOptionalCase1A = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(company1.getCompanyUsageId()))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase1A.isPresent());
+        val respCompanyA = respCompanyOptionalCase1A.get();
+        Assertions.assertNotNull(respCompanyA.getCeo());
+        Assertions.assertEquals(respCompanyA.getCeo().getCompanyExtId(), company1.getCompanyUsageId());
+        Assertions.assertTrue(respCompanyA.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(company1.getCompanyUsageId())));
+        val respCompanyOptionalCase1B = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(company2.getCompanyUsageId()))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase1B.isPresent());
+        val respCompanyB = respCompanyOptionalCase1B.get();
+        Assertions.assertNotNull(respCompanyB.getCeo());
+        Assertions.assertEquals(respCompanyB.getCeo().getCompanyExtId(), company2.getCompanyUsageId());
+        Assertions.assertTrue(respCompanyB.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(company2.getCompanyUsageId())));
 
 
 
@@ -174,7 +193,15 @@ public class RelationalReadOnlyLockedContextTest {
                 .execute()
                 .orElse(new ArrayList<>());
         System.out.println(new ObjectMapper().writeValueAsString(dataList2));
-
+        Assertions.assertNotNull(dataList2);
+        Assertions.assertEquals(1, dataList2.size());
+        val respCompanyOptionalCase2A = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(companyToRetrieve))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase2A.isPresent());
+        val respCompanyCase2 = respCompanyOptionalCase2A.get();
+        Assertions.assertNotNull(respCompanyCase2.getCeo());
+        Assertions.assertTrue(respCompanyCase2.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(companyToRetrieve)));
 
 
 
