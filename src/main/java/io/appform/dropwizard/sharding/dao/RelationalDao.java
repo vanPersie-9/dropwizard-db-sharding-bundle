@@ -903,7 +903,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     .numRows(1)
                     .build();
 
-            return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(context.getSessionFactory(),
+            return transactionExecutor.<List<T>, SelectParamPriv<T>, Boolean>execute(context.getSessionFactory(),
                                                                                   true,
                                                                                   dao::select,
                                                                                   selectParam,
@@ -977,7 +977,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
 
         try {
-            final SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
+            val selectParam = SelectParamPriv.<T>builder()
                     .querySpec(querySpec)
                     .start(0)
                     .numRows(1)
@@ -1018,12 +1018,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
-            SelectParamPriv selectParam = SelectParamPriv.builder()
+            val selectParam = SelectParamPriv.<T>builder()
                     .criteria(criteria)
                     .start(start)
                     .numRows(numRows)
                     .build();
-            return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(dao.sessionFactory,
+            return transactionExecutor.<List<T>, SelectParamPriv<T>, Boolean>execute(dao.sessionFactory,
                                                                                   true,
                                                                                   dao::select,
                                                                                   selectParam,
@@ -1084,12 +1084,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
-            SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
+            val selectParam = SelectParamPriv.<T>builder()
                     .querySpec(querySpec)
                     .start(start)
                     .numRows(numResults)
                     .build();
-            return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(dao.sessionFactory,
+            return transactionExecutor.<List<T>, SelectParamPriv<T>, Boolean>execute(dao.sessionFactory,
                                                                                   true,
                                                                                   dao::select,
                                                                                   selectParam,

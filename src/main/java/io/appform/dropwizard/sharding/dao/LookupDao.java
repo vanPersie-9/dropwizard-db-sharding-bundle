@@ -1245,7 +1245,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return An optional containing the retrieved entity, or an empty optional if not found.
          */
         public Optional<T> execute() {
-            T result = executeImpl();
+            var result = executeImpl();
             if (null == result
                     && null != entityPopulator
                     && Boolean.TRUE.equals(entityPopulator.get())) {//Try to populate entity (maybe from cold store etc)
