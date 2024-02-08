@@ -106,6 +106,8 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     private final List<TransactionObserver> observers = new ArrayList<>();
 
+    private final List<Class<?>> initialisedEntities;
+
     private TransactionObserver rootObserver;
 
     protected DBShardingBundleBase(
@@ -114,6 +116,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
             Class<?>... entities) {
         this.dbNamespace = dbNamespace;
         val inEntities = ImmutableList.<Class<?>>builder().add(entity).add(entities).build();
+        this.initialisedEntities = inEntities;
         init(inEntities);
     }
 
@@ -124,6 +127,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 String.format("No entity class found at %s",
                         String.join(",", classPathPrefixList)));
         val inEntities = ImmutableList.<Class<?>>builder().addAll(entities).build();
+        this.initialisedEntities = inEntities;
         init(inEntities);
     }
 
@@ -133,6 +137,13 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
 
     protected DBShardingBundleBase(String... classPathPrefixes) {
         this(DEFAULT_NAMESPACE, Arrays.asList(classPathPrefixes));
+    }
+
+    public List<Class<?>> getInitialisedEntities() {
+        if(this.initialisedEntities == null){
+            throw new RuntimeException("DB sharding bundle is not initialised !");
+        }
+        return this.initialisedEntities;
     }
 
     protected abstract ShardManager createShardManager(int numShards, ShardBlacklistingStore blacklistingStore);

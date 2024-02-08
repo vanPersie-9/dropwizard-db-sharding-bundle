@@ -32,6 +32,7 @@ import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import lombok.val;
+import org.apache.commons.lang3.RandomUtils;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -39,6 +40,7 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Property;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -54,9 +56,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class RelationalDaoTest {
 
-    private List<SessionFactory> sessionFactories = Lists.newArrayList();
+    private final List<SessionFactory> sessionFactories = Lists.newArrayList();
     private RelationalDao<RelationalEntity> relationalDao;
     private RelationalDao<RelationalEntityWithAIKey> relationalWithAIDao;
+
+    private ShardManager shardManager;
+    private ShardCalculator<String> shardCalculator;
 
     private SessionFactory buildSessionFactory(String dbName) {
         Configuration configuration = new Configuration();
@@ -82,9 +87,16 @@ public class RelationalDaoTest {
         for (int i = 0; i < 16; i++) {
             sessionFactories.add(buildSessionFactory(String.format("db_%d", i)));
         }
-        final ShardManager shardManager = new BalancedShardManager(sessionFactories.size());
+        this.shardManager = new BalancedShardManager(sessionFactories.size());
+        this.shardCalculator = new ShardCalculator<>(shardManager, new ConsistentHashBucketIdExtractor<>(shardManager));
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         relationalDao = new RelationalDao<>(sessionFactories,
+                RelationalEntity.class,
+                this.shardCalculator,
+                shardInfoProvider,
+                new EntityClassThreadLocalObserver(
+                        new DaoClassLocalObserver(
+                                new TerminalTransactionObserver())));
                                             RelationalEntity.class,
                                             new ShardCalculator<>(shardManager,
                                                                   new ConsistentHashBucketIdExtractor<>(shardManager)),

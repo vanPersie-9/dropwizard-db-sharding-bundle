@@ -35,6 +35,7 @@ import java.util.Objects;
 @NamedQueries({
         @NamedQuery(name = "testTextUpdateQuery", query = "update TestEntity set text = :text where externalId =:externalId")})
 public class TestEntity {
+
     @Id
     @NotEmpty
     @LookupKey
