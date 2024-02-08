@@ -59,6 +59,7 @@ import java.util.stream.IntStream;
  * A murmur 128 hash of the string parent key is used to route the save and retrieve calls from the proper shard.
  */
 @Slf4j
+@SuppressWarnings({"unchecked", "UnusedReturnValue"})
 public class RelationalDao<T> implements ShardedDao<T> {
 
     private final class RelationalDaoPriv extends AbstractDAO<T> {
@@ -67,7 +68,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         /**
          * Creates a new DAO with a given session provider.
-         *
+    
          * @param sessionFactory a session provider
          */
         public RelationalDaoPriv(SessionFactory sessionFactory) {
@@ -77,7 +78,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         /**
          * Get a row matching the field annotated with {@code @Id} annotation
-         *
+    
          * @param lookupKey ID for which data needs to be fetched
          */
 
@@ -92,7 +93,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         /**
          * Reads all rows matching the {@code querySpec} in locked mode. This is equivalent to <i>for update</i> semantics
          * during database fetch
-         *
+    
          * @param querySpec QuerySpec to be used. This should contain all JPA filters which need to be applied for row selection
          */
         T getLockedForWrite(final QuerySpec<T, T> querySpec) {
@@ -122,7 +123,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         void update(T oldEntity, T entity) {
-            currentSession().evict(oldEntity); //Detach .. otherwise update is a no-op
+            currentSession().evict(oldEntity); //Detach ... otherwise update is a no-op
             currentSession().update(entity);
         }
 
@@ -150,7 +151,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         /**
          * Run a query inside this shard and return the matching list.
-         *
+    
          * @param criteria selection criteria to be applied.
          * @return List of elements or empty list if none found
          */
@@ -182,7 +183,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         }
 
         public int update(final UpdateOperationMeta updateOperationMeta) {
-            Query query = currentSession().createNamedQuery(updateOperationMeta.getQueryName());
+            val query = currentSession().createNamedQuery(updateOperationMeta.getQueryName());
             updateOperationMeta.getParams().forEach(query::setParameter);
             return query.executeUpdate();
         }
@@ -198,14 +199,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
 
     @Builder
+    @Getter
     private static class ScrollParamPriv<T> {
-        @Getter
         private DetachedCriteria criteria;
-        @Getter
         private QuerySpec<T, T> querySpec;
     }
 
-    private List<RelationalDaoPriv> daos;
+    private final List<RelationalDaoPriv> daos;
     private final Class<T> entityClass;
     @Getter
     private final ShardCalculator<String> shardCalculator;
@@ -217,12 +217,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Constructs a RelationalDao instance for managing entities across multiple shards.
-     *
      * This constructor initializes a RelationalDao instance for working with entities of the specified class
      * distributed across multiple shards. It requires a list of session factories, a shard calculator,
      * a shard information provider, and a transaction observer. The entity class must designate one field as
      * the primary key using the `@Id` annotation.
-     *
+
      * @param sessionFactories A list of SessionFactory instances for database access across shards.
      * @param entityClass The Class representing the type of entities managed by this RelationalDao.
      * @param shardCalculator A ShardCalculator instance used to determine the shard for each operation.
@@ -261,11 +260,10 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Retrieves an entity associated with a specific key from the database and returns it wrapped in an Optional.
-     *
      * This method allows you to retrieve an entity associated with a parent key and a specific key from the database.
      * It uses the superclass's `get` method for the retrieval operation and returns the retrieved entity wrapped in an Optional.
      * If the entity is found in the database, it is returned within the Optional; otherwise, an empty Optional is returned.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for updating the entity.
      * @param key The specific key or identifier of the entity to retrieve.
      * @return An Optional containing the retrieved entity if found, or an empty Optional if the entity is not found.
@@ -285,11 +283,10 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Saves an entity to the database and returns the saved entity wrapped in an Optional.
-     *
      * This method allows you to save an entity associated with a parent key to the database using the specified parent key.
      * It uses the superclass's `save` method for the saving operation and returns the saved entity wrapped in an Optional.
      * If the save operation is successful, the saved entity is returned; otherwise, an empty Optional is returned.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for updating the entity.
      * @param entity The entity to be saved.
      * @return An Optional containing the saved entity if the save operation is successful, or an empty Optional if the save operation fails.
@@ -309,11 +306,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Saves a collection of entities associated to the database and returns a boolean indicating the success of the operation.
-     *
+
      * This method allows you to save a collection of entities associated with a parent key to the database using the specified parent key.
      * It uses the superclass's `saveAll` method for the bulk saving operation and returns `true` if the operation is successful;
      * otherwise, it returns `false`.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for updating the entity.
      * @param entities The collection of entities to be saved.
      * @return `true` if the bulk save operation is successful, or `false` if it fails.
@@ -371,11 +368,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Updates an entity within a locked context using a specific ID and an updater function.
-     *
+
      * This method updates an entity within a locked context using the provided ID and an updater function.
      * It is designed to work within the context of a locked transaction. The method delegates the update operation to
      * the DAO associated with the locked context and returns a boolean indicating the success of the update operation.
-     *
+
      * @param context The locked context within which the entity is updated.
      * @param id The ID of the entity to be updated.
      * @param updater A function that takes the current entity and returns the updated entity.
@@ -388,12 +385,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Updates entities matching the specified criteria within a locked context using an updater function.
-     *
+
      * This method updates entities within a locked context based on the provided criteria and an updater function.
      * It allows you to specify a DetachedCriteria object to filter the entities to be updated. The method iterates
      * through the matched entities, applies the updater function to each entity, and performs the update operation.
      * The update process continues as long as the `updateNext` supplier returns `true` and there are more matching entities.
-     *
+
      * @param context The locked context within which entities are updated.
      * @param criteria A DetachedCriteria object representing the criteria for filtering entities to update.
      * @param updater A function that takes an entity and returns the updated entity.
@@ -410,15 +407,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 .criteria(criteria)
                 .build();
         try {
-
-
             return transactionExecutor.<ScrollableResults, ScrollParamPriv<T>, Boolean>execute(context.getSessionFactory(),
                                                                                             true,
                                                                                             dao::scroll,
                                                                                             scrollParam,
                                                                                             scrollableResults -> {
                                                                                                 boolean updateNextObject = true;
-                                                                                                try {
+                                                                                                try (scrollableResults) {
                                                                                                     while (scrollableResults.next() && updateNextObject) {
                                                                                                         final T entity = (T) scrollableResults.get(
                                                                                                                 0);
@@ -436,9 +431,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                                                                         updateNextObject = updateNext.getAsBoolean();
                                                                                                     }
                                                                                                 }
-                                                                                                finally {
-                                                                                                    scrollableResults.close();
-                                                                                                }
                                                                                                 return true;
                                                                                             },
                                                                                             false,
@@ -448,7 +440,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         catch (Exception e) {
             return transactionExecutor.<ScrollableResults, ScrollParamPriv<T>, Boolean>execute(context.getSessionFactory(), true, dao::scroll, scrollParam, scrollableResults -> {
                 boolean updateNextObject = true;
-                try {
+                try (scrollableResults) {
                     while (scrollableResults.next() && updateNextObject) {
                         final T entity = (T) scrollableResults.get(0);
                         if (null == entity) {
@@ -461,8 +453,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                         dao.update(entity, newEntity);
                         updateNextObject = updateNext.getAsBoolean();
                     }
-                } finally {
-                    scrollableResults.close();
                 }
                 return true;
             }, false, "update", context.getShardId());
@@ -470,12 +460,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
     }
     /**
      * Updates entities within a specific shard based on a query, an update function, and scrolling through results.
-     *
+
      * This method performs an update operation on a set of entities within a specific shard, as determined
      * by the provided context and shard ID. It uses the provided query criteria to select entities and
      * applies the provided updater function to update each entity. The scrolling mechanism allows for
      * processing a large number of results efficiently.
-     *
+
      * @param context A LockedContext<U> object containing shard information and a session factory.
      * @param querySpec A QuerySpec object specifying the query criteria.
      * @param updater A function that takes an old entity, applies updates, and returns a new entity.
@@ -497,7 +487,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
             return transactionExecutor.<ScrollableResults, ScrollParamPriv<T>, Boolean>execute(context.getSessionFactory(), true, dao::scroll, scrollParam, scrollableResults -> {
                 boolean updateNextObject = true;
-                try {
+                try (scrollableResults) {
                     while (scrollableResults.next() && updateNextObject) {
                         final T entity = (T) scrollableResults.get(0);
                         if (null == entity) {
@@ -510,8 +500,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                         dao.update(entity, newEntity);
                         updateNextObject = updateNext.getAsBoolean();
                     }
-                } finally {
-                    scrollableResults.close();
                 }
                 return true;
             }, false, "update", context.getShardId());
@@ -538,11 +526,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Executes a database query within a specific shard, retrieving a list of query results.
-     *
+
      * This method performs a database query on a specific shard, as determined by the provided
      * context and shard ID. It retrieves a specified number of results starting from a given index
      * based on the provided query criteria. The query results are returned as a list of entities.
-     *
+
      * @param context A LookupDao.ReadOnlyContext object containing shard information and a session factory.
      * @param querySpec A QuerySpec object specifying the query criteria and projection.
      * @param start The starting index for the query results (pagination).
@@ -571,7 +559,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * - Do not modify the criteria between subsequent calls
      * - It is important to provide a sort field that is perpetually increasing
      * - Pointer returned can be used to _only_ scroll down
-     *
+
      * @param inCriteria    The core criteria for the query
      * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
      * @param pageSize      Count of records per shard
@@ -608,7 +596,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * - Do not modify the criteria between subsequent calls
      * - It is important to provide a sort field that is perpetually increasing
      * - Pointer returned can be used to _only_ scroll up
-     *
+
      * @param inCriteria    The core criteria for the query
      * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
      * @param pageSize      Count of records per shard
@@ -643,7 +631,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Run arbitrary read-only queries on all shards and return results.
-     *
+
      * @param criteria The detached criteria. Typically, a grouping or counting query
      * @return A map of shard vs result-list
      */
@@ -655,12 +643,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Run read-only queries on all shards and transform them into required types
-     *
+
      * @param criteria   The detached criteria. Typically, a grouping or counting query
      * @param translator A method to transform results to required type
      * @param <U>        Return type
      * @return Translated result
      */
+    @SuppressWarnings("rawtypes")
     public <U> U run(DetachedCriteria criteria, Function<Map<Integer, List>, U> translator) {
         val output = IntStream.range(0, daos.size())
                 .boxed()
@@ -684,11 +673,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Updates an entity within a specific shard based on its unique identifier and an update function.
-     *
+
      * This private method is responsible for updating an entity within a specific shard, as identified
      * by the shard ID. It retrieves the entity with the provided unique identifier, applies the provided
      * updater function to update the entity, and saves the updated entity back to the database.
-     *
+
      * @param shardId The identifier of the shard where the entity is located.
      * @param daoSessionFactory The SessionFactory associated with the DAO for database access.
      * @param dao The RelationalDaoPriv responsible for accessing the database.
@@ -735,12 +724,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
-            SelectParamPriv selectParam = SelectParamPriv.builder()
+            val selectParam = SelectParamPriv.<T>builder()
                     .criteria(criteria)
                     .start(0)
                     .numRows(1)
                     .build();
-            return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(dao.sessionFactory,
+            return transactionExecutor.<List<T>, SelectParamPriv<T>, Boolean>execute(dao.sessionFactory,
                                                                                   true,
                                                                                   dao::select,
                                                                                   selectParam,
@@ -775,12 +764,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Updates a single entity within a specific shard based on query criteria and an update function.
-     *
+
      * This method performs the operation of updating an entity within a specific shard, as determined
      * by the provided parent key and shard calculator. It uses the provided query criteria to select
      * the entity to be updated. If the entity is found, the provided updater function is applied to
      * update the entity, and the updated entity is saved.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for updating
      *                  the entity.
      * @param querySpec A QuerySpec object specifying the criteria for selecting the entity to update.
@@ -793,12 +782,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         try {
-            SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
+            val selectParam = SelectParamPriv.<T>builder()
                     .querySpec(querySpec)
                     .start(0)
                     .numRows(1)
                     .build();
-            return transactionExecutor.<List<T>, SelectParamPriv, Boolean>execute(dao.sessionFactory, true, dao::select, selectParam, (List<T> entityList) -> {
+            return transactionExecutor.<List<T>, SelectParamPriv<T>, Boolean>execute(dao.sessionFactory, true, dao::select, selectParam, (List<T> entityList) -> {
                 if (entityList == null || entityList.isEmpty()) {
                     return false;
                 }
@@ -840,20 +829,20 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public LockedContext<T> lockAndGetExecutor(String parentKey, DetachedCriteria criteria) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria),
-                                    entityClass, shardInfoProvider, observer);
+        return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(criteria),
+                                   entityClass, shardInfoProvider, observer);
     }
 
 
     /**
      * Acquires a write lock on entities matching the provided query criteria within a specific shard
      * and returns a LockedContext for further operations.
-     *
+
      * This method performs the operation of acquiring a write lock on entities within a specific shard,
      * as determined by the provided parent key and shard calculator. It uses the provided query criteria
      * to select the entities to be locked. It then constructs and returns a LockedContext object that
      * encapsulates the shard information and allows for subsequent operations on the locked entities.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  acquiring the write lock.
      * @param querySpec A QuerySpec object specifying the criteria for selecting entities to lock.
@@ -863,18 +852,18 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public LockedContext<T> lockAndGetExecutor(String parentKey, QuerySpec<T, T> querySpec) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        return new LockedContext<T>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(querySpec),
-                entityClass, shardInfoProvider, observer);
+        return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(querySpec),
+                                   entityClass, shardInfoProvider, observer);
     }
 
     /**
      * Saves an entity within a specific shard and returns a LockedContext for further operations.
-     *
+
      * This method performs the operation of saving an entity within a specific shard, as determined by
      * the provided parent key and shard calculator. It then constructs and returns a LockedContext
      * object that encapsulates the shard information and allows for subsequent operations on the
      * saved entity.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  saving the entity.
      * @param entity The entity of type T to be saved.
@@ -884,8 +873,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public LockedContext<T> saveAndGetExecutor(String parentKey, T entity) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        return new LockedContext<T>(shardId, dao.sessionFactory, dao::save, entity,
-                                    entityClass, shardInfoProvider, observer);
+        return new LockedContext<>(shardId, dao.sessionFactory, dao::save, entity,
+                                   entityClass, shardInfoProvider, observer);
     }
 
     <U> boolean createOrUpdate(
@@ -954,13 +943,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Creates or updates a single entity within a specific shard based on a query and update logic.
-     *
+
      * This method performs a create or update operation on a single entity within a specific shard,
      * as determined by the provided LockedContext and shard ID. It uses the provided query to check
      * for the existence of an entity, and based on the result:
      * - If no entity is found, it generates a new entity using the entity generator and saves it.
      * - If an entity is found, it applies the provided updater function to update the entity.
-     *
+
      * @param context A LockedContext object containing information about the shard and session factory.
      * @param querySpec A QuerySpec object specifying the criteria for selecting an entity.
      * @param updater A function that takes an old entity, applies updates, and returns a new entity.
@@ -1058,12 +1047,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Updates a batch of entities within a specific shard based on a query and an update function.
-     *
+
      * This method performs an update operation on a batch of entities within a specific shard,
      * as determined by the provided parent key and shard calculator. It retrieves a specified
      * number of entities that match the criteria defined in the provided QuerySpec object, applies
      * the provided updater function to each entity, and updates the entities in the database.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  the update operation.
      * @param start The starting index for selecting entities to update (pagination).
@@ -1125,12 +1114,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Executes a database query within a specific shard, retrieving a list of query results.
-     *
+
      * This method performs a database query on a specific shard, as determined by the provided
      * parent key and shard calculator. It retrieves a specified number of results starting from
      * a given index and returns them as a list. The query results are processed using a default
      * identity function.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  the query.
      * @param querySpec A QuerySpec object specifying the query criteria and projection.
@@ -1162,12 +1151,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Executes a database query within a specific shard, retrieving and processing the results.
-     *
+
      * This method performs a database query on a specific shard, as determined by the provided
      * parent key and shard calculator. It retrieves a specified number of results starting from
      * a given index, processes the results using the provided handler function, and returns the
      * result of the handler function.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  the query.
      * @param querySpec A QuerySpec object specifying the query criteria and projection.
@@ -1210,11 +1199,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Counts the number of records matching a specified query in a given shard
-     *
+
      * This method calculates and returns the count of records that match the criteria defined
      * in the provided QuerySpec object. The counting operation is performed within the shard
      * associated with the provided parent key, as determined by the shard calculator.
-     *
+
      * @param parentKey A string representing the parent key that determines the shard for
      *                  the counting operation.
      * @param querySpec A QuerySpec object specifying the query criteria for counting records.
@@ -1246,7 +1235,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * Queries using the specified criteria across all shards and returns the counts of rows satisfying
      * the criteria.
      * <b>Note:</b> This method runs the query serially and it's usage is not recommended.
-     *
+
      * @param criteria The select criteria
      * @return List of counts in each shard
      */
@@ -1290,7 +1279,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     /**
      * Executes a scatter-gather operation across multiple Data Access Objects (DAOs) in a serial manner
-     *
+
      * @param querySpec A QuerySpec object specifying the query to execute.
      * @param start The starting index for the query results (pagination).
      * @param numRows The number of rows to retrieve in the query results (pagination).
