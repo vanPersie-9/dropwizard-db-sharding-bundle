@@ -25,14 +25,18 @@ import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
+import io.appform.dropwizard.sharding.scroll.FieldComparator;
 import io.appform.dropwizard.sharding.scroll.ScrollPointer;
 import io.appform.dropwizard.sharding.scroll.ScrollResult;
 import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
+import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
@@ -43,6 +47,7 @@ import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
+import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
@@ -80,7 +85,6 @@ public class LookupDao<T> implements ShardedDao<T> {
      * <p>It uses a Hibernate {@link SessionFactory} to manage database sessions and perform
      * operations within the scope of a session.
      *
-     * @param <T> The entity type this DAO operates on.
      */
     private final class LookupDaoPriv extends AbstractDAO<T> {
 
@@ -102,10 +106,11 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Get an element from the shard.
+         * Retrieves an entity from the shard based on the provided lookup key. The entity is
+         * retrieved without any locking applied.
          *
-         * @param lookupKey Id of the object
-         * @return Extracted element or null if not found.
+         * @param lookupKey The unique lookup key identifying the entity.
+         * @return The retrieved entity, or null if the entity is not found.
          */
         T get(String lookupKey) {
             return getLocked(lookupKey, x -> x, LockMode.READ);
@@ -142,10 +147,13 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Get an element from the shard.
+         * Retrieves an entity from the shard with the specified lock mode applied. The entity is
+         * locked with the specified lock mode to control concurrent access.
          *
-         * @param lookupKey Id of the object
-         * @return Extracted element or null if not found.
+         * @param lookupKey The unique lookup key identifying the entity.
+         * @param lockMode  The type of lock to be applied (e.g., NONE, PESSIMISTIC_WRITE).
+         * @return The retrieved entity, or null if the entity is not found.
+         * @throws org.hibernate.NonUniqueResultException if database returns more than 1 rows for {@code lookupKey}
          */
         T getLocked(String lookupKey, LockModeType lockMode) {
             val session = currentSession();
@@ -251,7 +259,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * not exist.
          */
         boolean delete(String id) {
-            return Optional.ofNullable(getLocked(id, LockMode.UPGRADE_NOWAIT))
+            return Optional.ofNullable(getLocked(id, LockModeType.PESSIMISTIC_WRITE))
                     .map(object -> {
                         currentSession().delete(object);
                         return true;
@@ -717,6 +725,81 @@ public class LookupDao<T> implements ShardedDao<T> {
                         throw new RuntimeException(e);
                     }
                 }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll down in ascending order of the
+     * 'sortFieldName' field. Newly added records can be polled by passing the pointer repeatedly. If nothing new is
+     * available, it will return an empty set of results.
+     * If the passed pointer is null, it will return the first pageSize records with a pointer to be passed to get the
+     * next pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll down
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    public ScrollResult<T> scrollDown(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        log.debug("SCROLL POINTER: {}", inPointer);
+        val pointer = inPointer == null ? new ScrollPointer(ScrollPointer.Direction.DOWN) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.DOWN),
+                                    "A down scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.asc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollDown");
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll up in descending order of the
+     * 'sortFieldName' field.
+     * As this api goes back in order, newly added records will not be available in the scroll.
+     * If the passed pointer is null, it will return the last pageSize records with a pointer to be passed to get the
+     * previous pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll up
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    @SneakyThrows
+    public ScrollResult<T> scrollUp(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        val pointer = null == inPointer ? new ScrollPointer(ScrollPointer.Direction.UP) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.UP),
+                                    "An up scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.desc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .reversed()
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollUp");
     }
 
     /**

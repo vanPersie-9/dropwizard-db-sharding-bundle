@@ -32,7 +32,6 @@ import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import lombok.val;
-import org.apache.commons.lang3.RandomUtils;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -40,7 +39,6 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Property;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -52,7 +50,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class RelationalDaoTest {
 
@@ -97,13 +96,6 @@ public class RelationalDaoTest {
                 new EntityClassThreadLocalObserver(
                         new DaoClassLocalObserver(
                                 new TerminalTransactionObserver())));
-                                            RelationalEntity.class,
-                                            new ShardCalculator<>(shardManager,
-                                                                  new ConsistentHashBucketIdExtractor<>(shardManager)),
-                                            shardInfoProvider,
-                                            new EntityClassThreadLocalObserver(
-                                                    new DaoClassLocalObserver(
-                                                            new TerminalTransactionObserver())));
         relationalWithAIDao = new RelationalDao<>(sessionFactories,
                                                   RelationalEntityWithAIKey.class,
                                                   new ShardCalculator<>(shardManager,
