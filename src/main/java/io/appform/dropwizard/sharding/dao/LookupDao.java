@@ -18,6 +18,7 @@
 package io.appform.dropwizard.sharding.dao;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
 import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
@@ -25,32 +26,36 @@ import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.query.QuerySpec;
+import io.appform.dropwizard.sharding.scroll.FieldComparator;
+import io.appform.dropwizard.sharding.scroll.ScrollPointer;
+import io.appform.dropwizard.sharding.scroll.ScrollResult;
+import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
+import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.appform.dropwizard.sharding.utils.TransactionHandler;
 import io.dropwizard.hibernate.AbstractDAO;
 import lombok.Getter;
+import lombok.NonNull;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.hibernate.Criteria;
+import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
+import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
-import org.hibernate.query.Query;
 
 import javax.persistence.LockModeType;
 import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -78,8 +83,6 @@ public class LookupDao<T> implements ShardedDao<T> {
      *
      * <p>It uses a Hibernate {@link SessionFactory} to manage database sessions and perform
      * operations within the scope of a session.
-     *
-     * @param <T> The entity type this DAO operates on.
      */
     private final class LookupDaoPriv extends AbstractDAO<T> {
 
@@ -108,7 +111,26 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return The retrieved entity, or null if the entity is not found.
          */
         T get(String lookupKey) {
-            return getLocked(lookupKey, LockModeType.NONE);
+            return getLocked(lookupKey, x -> x, LockMode.READ);
+        }
+
+        T get(String lookupKey, UnaryOperator<Criteria> criteriaUpdater) {
+            return getLocked(lookupKey, criteriaUpdater, LockMode.READ);
+        }
+
+        /**
+         * Get an element from the shard.
+         *
+         * @param lookupKey       Id of the object
+         * @param criteriaUpdater Function to update criteria to add additional params
+         * @return Extracted element or null if not found.
+         */
+        T getLocked(String lookupKey, UnaryOperator<Criteria> criteriaUpdater, LockMode lockMode) {
+            Criteria criteria = criteriaUpdater.apply(currentSession()
+                                                              .createCriteria(entityClass)
+                                                              .add(Restrictions.eq(keyField.getName(), lookupKey))
+                                                              .setLockMode(lockMode));
+            return uniqueResult(criteria);
         }
 
         /**
@@ -175,6 +197,29 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
+         * Run a query inside this shard and return the matching list.
+         *
+         * @param criteria selection criteria to be applied.
+         * @return List of elements or empty list if none found
+         */
+        @SuppressWarnings("rawtypes")
+        List run(DetachedCriteria criteria) {
+            return criteria.getExecutableCriteria(currentSession())
+                    .list();
+        }
+
+        List<T> select(DetachedCriteria criteria, int start, int count) {
+            val executableCriteria = criteria.getExecutableCriteria(currentSession());
+            if (-1 != start) {
+                executableCriteria.setFirstResult(start);
+            }
+            if (-1 != count) {
+                executableCriteria.setMaxResults(count);
+            }
+            return list(executableCriteria);
+        }
+
+        /**
          * Runs a query inside the shard based on the provided {@code QuerySpec} and returns a
          * list of matching entities.
          *
@@ -236,13 +281,13 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return The number of entities affected by the update operation.
          */
         public int update(final UpdateOperationMeta updateOperationMeta) {
-            Query query = currentSession().createNamedQuery(updateOperationMeta.getQueryName());
+            val query = currentSession().createNamedQuery(updateOperationMeta.getQueryName());
             updateOperationMeta.getParams().forEach(query::setParameter);
             return query.executeUpdate();
         }
     }
 
-    private List<LookupDaoPriv> daos;
+    private final List<LookupDaoPriv> daos;
     private final Class<T> entityClass;
 
     @Getter
@@ -258,19 +303,19 @@ public class LookupDao<T> implements ShardedDao<T> {
 
     /**
      * Constructs a LookupDao instance for querying and managing entities across multiple shards.
-     *
+     * <p>
      * This constructor initializes a LookupDao instance for working with entities of the specified class
      * distributed across multiple shards. It requires a list of session factories, a shard calculator,
      * sharding options, a shard information provider, and a transaction observer.
      *
-     * @param sessionFactories A list of SessionFactory instances for database access across shards.
-     * @param entityClass The Class representing the type of entities managed by this LookupDao.
-     * @param shardCalculator A ShardCalculator instance used to determine the shard for each operation.
-     * @param shardingOptions ShardingBundleOptions specifying additional sharding configuration options.
+     * @param sessionFactories  A list of SessionFactory instances for database access across shards.
+     * @param entityClass       The Class representing the type of entities managed by this LookupDao.
+     * @param shardCalculator   A ShardCalculator instance used to determine the shard for each operation.
+     * @param shardingOptions   ShardingBundleOptions specifying additional sharding configuration options.
      * @param shardInfoProvider A ShardInfoProvider for retrieving shard information.
-     * @param observer A TransactionObserver for monitoring transaction events.
+     * @param observer          A TransactionObserver for monitoring transaction events.
      * @throws IllegalArgumentException If the entity class does not have exactly one field marked as LookupKey,
-     *         if the key field is not accessible, or if it is not of type String.
+     *                                  if the key field is not accessible, or if it is not of type String.
      */
     public LookupDao(
             List<SessionFactory> sessionFactories,
@@ -287,20 +332,21 @@ public class LookupDao<T> implements ShardedDao<T> {
         this.observer = observer;
         this.transactionExecutor = new TransactionExecutor(shardInfoProvider, getClass(), entityClass, observer);
 
-        Field fields[] = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
+        Field[] fields = FieldUtils.getFieldsWithAnnotation(entityClass, LookupKey.class);
         Preconditions.checkArgument(fields.length != 0, "At least one field needs to be sharding key");
         Preconditions.checkArgument(fields.length == 1, "Only one field can be sharding key");
         keyField = fields[0];
         if (!keyField.isAccessible()) {
             try {
                 keyField.setAccessible(true);
-            } catch (SecurityException e) {
+            }
+            catch (SecurityException e) {
                 log.error("Error making key field accessible please use a public method and mark that as LookupKey", e);
                 throw new IllegalArgumentException("Invalid class, DAO cannot be created.", e);
             }
         }
         Preconditions.checkArgument(ClassUtils.isAssignable(keyField.getType(), String.class),
-                "Key field must be a string");
+                                    "Key field must be a string");
     }
 
     /**
@@ -313,12 +359,17 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @throws Exception if backing dao throws
      */
     public Optional<T> get(String key) throws Exception {
-        return Optional.ofNullable(get(key, t -> t));
+        return Optional.ofNullable(get(key, x -> x, t -> t));
+    }
+
+    public Optional<T> get(String key, UnaryOperator<Criteria> criteriaUpdater) throws Exception {
+        return Optional.ofNullable(get(key, criteriaUpdater, t -> t));
     }
 
     /**
      * Get an object on the basis of key (value of field annotated with {@link LookupKey}) from any shard
-     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get function.
+     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get
+     * function.
      * <b>Note:</b> The transaction is open when handler is applied. So lazy loading will work inside the handler.
      * Once get returns, lazy loading will nt owrok.
      *
@@ -331,7 +382,20 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(key);
         LookupDaoPriv dao = daos.get(shardId);
         return transactionExecutor.execute(dao.sessionFactory, true, dao::get, key, handler, "get",
-                shardId);
+                                           shardId);
+    }
+
+    @SuppressWarnings("java:S112")
+    public <U> U get(String key, UnaryOperator<Criteria> criteriaUpdater, Function<T, U> handler) throws Exception {
+        int shardId = shardCalculator.shardId(key);
+        LookupDaoPriv dao = daos.get(shardId);
+        return transactionExecutor.execute(dao.sessionFactory,
+                                           true,
+                                           k -> dao.get(k, criteriaUpdater),
+                                           key,
+                                           handler,
+                                           "get",
+                                           shardId);
     }
 
     /**
@@ -349,7 +413,8 @@ public class LookupDao<T> implements ShardedDao<T> {
      * Saves an entity on proper shard based on hash of the value in the key field in the object.
      * The updated entity is returned. If Cascade is specified, this can be used
      * to save an object tree based on the shard of the top entity that has the key field.
-     * <b>Note:</b> Lazy loading will not work on the augmented entity. Use the alternate {@link #save(Object, Function)} for that.
+     * <b>Note:</b> Lazy loading will not work on the augmented entity. Use the alternate
+     * {@link #save(Object, Function)} for that.
      *
      * @param entity Entity to save
      * @return Entity
@@ -361,7 +426,8 @@ public class LookupDao<T> implements ShardedDao<T> {
 
     /**
      * Save an object on the basis of key (value of field annotated with {@link LookupKey}) to target shard
-     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get function.
+     * and applies the provided function/lambda to it. The return from the handler becomes the return to the get
+     * function.
      * <b>Note:</b> Handler is executed in the same transactional context as the save operation.
      * So any updates made to the object in this context will also get persisted.
      *
@@ -376,13 +442,41 @@ public class LookupDao<T> implements ShardedDao<T> {
         log.debug("Saving entity of type {} with key {} to shard {}", entityClass.getSimpleName(), key, shardId);
         LookupDaoPriv dao = daos.get(shardId);
         return transactionExecutor.execute(dao.sessionFactory, false, dao::save, entity, handler,
-                "save", shardId);
+                                           "save", shardId);
+    }
+
+    public Optional<T> createOrUpdate(
+            String id,
+            UnaryOperator<T> updater,
+            Supplier<T> entityGenerator) {
+        val shardId = shardCalculator.shardId(id);
+        val dao = daos.get(shardId);
+        return Optional.of(transactionExecutor.execute(dao.sessionFactory,
+                                                       false,
+                                                       dao::getLockedForWrite,
+                                                       id,
+                                                       result -> {
+                                                           if (null == result) {
+                                                               val newEntity = entityGenerator.get();
+                                                               if (null != newEntity) {
+                                                                   return dao.save(newEntity);
+                                                               }
+                                                               return null;
+                                                           }
+                                                           val updated = updater.apply(result);
+                                                           if (null != updated) {
+                                                               dao.update(updated);
+                                                           }
+                                                           return dao.get(id);
+                                                       }, "createOrUpdate", shardId));
     }
 
 
     /**
-     * Updates an entity. For this update, first a lock is taken on database on selected row (using <i>for update</i> semantics)
-     * and {@code updater} is applied on the retrieved entity. It is prudent to not perform any time-consuming activity inside
+     * Updates an entity. For this update, first a lock is taken on database on selected row (using <i>for update</i>
+     * semantics)
+     * and {@code updater} is applied on the retrieved entity. It is prudent to not perform any time-consuming
+     * activity inside
      * {@code updater} to prevent long lasting locks on database
      *
      * @param id      The ID of the entity to update.
@@ -432,7 +526,7 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return transactionExecutor.execute(dao.sessionFactory, false, dao::update, updateOperationMeta,
-                "updateUsingQuery", shardId);
+                                           "updateUsingQuery", shardId);
     }
 
     /**
@@ -465,7 +559,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 dao.update(newEntity);
                 return true;
             }, "updateImpl", shardId);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             throw new RuntimeException("Error updating entity: " + id, e);
         }
     }
@@ -485,7 +580,11 @@ public class LookupDao<T> implements ShardedDao<T> {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new LockedContext<>(shardId, dao.sessionFactory, () -> dao.getLockedForWrite(id),
-                entityClass, shardInfoProvider, observer);
+                                   entityClass, shardInfoProvider, observer);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(String id) {
+        return readOnlyExecutor(id, x -> x);
     }
 
     /**
@@ -496,20 +595,24 @@ public class LookupDao<T> implements ShardedDao<T> {
      * It does not perform entity population during read operations.
      *
      * @param id The ID of the entity for which the read-only context is created.
+     * @param criteriaUpdater A method that lets clients add additional changes to the criteria before the get
      * @return A new ReadOnlyContext for executing read operations on the specified entity.
      */
-    public ReadOnlyContext<T> readOnlyExecutor(final String id) {
+    public ReadOnlyContext<T> readOnlyExecutor(String id, UnaryOperator<Criteria> criteriaUpdater) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
-                dao.sessionFactory,
-                key -> dao.getLocked(key, LockModeType.NONE),
-                null,
-                id,
-                shardingOptions.isSkipReadOnlyTransaction(),
-                shardInfoProvider, entityClass, observer);
+                                     dao.sessionFactory,
+                                     key -> dao.getLocked(key, criteriaUpdater, LockMode.NONE),
+                                     null,
+                                     id,
+                                     shardingOptions.isSkipReadOnlyTransaction(),
+                                     shardInfoProvider, entityClass, observer);
     }
 
+    public ReadOnlyContext<T> readOnlyExecutor(String id, Supplier<Boolean> entityPopulator) {
+        return readOnlyExecutor(id, x -> x, entityPopulator);
+    }
 
     /**
      * Creates and returns a read-only context for executing read operations on an entity with the specified ID,
@@ -523,17 +626,20 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @param entityPopulator A supplier that determines whether entity population should be performed.
      * @return A new ReadOnlyContext for executing read operations on the specified entity.
      */
-    public ReadOnlyContext<T> readOnlyExecutor(final String id,
-                                               final Supplier<Boolean> entityPopulator) {
+
+    public ReadOnlyContext<T> readOnlyExecutor(
+            String id,
+            UnaryOperator<Criteria> criteriaUpdater,
+            Supplier<Boolean> entityPopulator) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
-                dao.sessionFactory,
-                key -> dao.getLocked(key, LockModeType.NONE),
-                entityPopulator,
-                id,
-                shardingOptions.isSkipReadOnlyTransaction(),
-                shardInfoProvider, entityClass, observer);
+                                     dao.sessionFactory,
+                                     key -> dao.getLocked(key, criteriaUpdater, LockMode.NONE),
+                                     entityPopulator,
+                                     id,
+                                     shardingOptions.isSkipReadOnlyTransaction(),
+                                     shardInfoProvider, entityClass, observer);
     }
 
 
@@ -552,23 +658,21 @@ public class LookupDao<T> implements ShardedDao<T> {
         String id;
         try {
             id = keyField.get(entity).toString();
-        } catch (IllegalAccessException e) {
+        }
+        catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return new LockedContext<>(shardId, dao.sessionFactory, dao::save, entity,
-                entityClass, shardInfoProvider, observer);
+                                   entityClass, shardInfoProvider, observer);
     }
 
-
     /**
+     * Queries using the specified criteria across all shards and returns the result.
+     * <b>Note:</b> This method runs the query serially, and it's usage is not recommended.
      * Performs a scatter-gather operation by executing a query on all database shards
      * and collecting the results into a list of entities.
-     *
-     * <p>This method executes the provided query criteria on all available database shards in serial,
-     * retrieving entities that match the criteria from each shard. The results are then collected
-     * into a single list of entities, effectively performing a scatter-gather operation
      *
      * @param criteria The DetachedCriteria object representing the query criteria to be executed
      *                 on all database shards.
@@ -579,9 +683,14 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .mapToObj(shardId -> {
                     try {
                         val dao = daos.get(shardId);
-                        return transactionExecutor.execute(dao.sessionFactory, true, dao::select, criteria, "scatterGather",
-                                shardId);
-                    } catch (Exception e) {
+                        return transactionExecutor.execute(dao.sessionFactory,
+                                                           true,
+                                                           dao::select,
+                                                           criteria,
+                                                           "scatterGather",
+                                                           shardId);
+                    }
+                    catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }).flatMap(Collection::stream).collect(Collectors.toList());
@@ -605,12 +714,92 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .mapToObj(shardId -> {
                     try {
                         val dao = daos.get(shardId);
-                        return transactionExecutor.execute(dao.sessionFactory, true, dao::select, querySpec, "scatterGather",
-                                shardId);
-                    } catch (Exception e) {
+                        return transactionExecutor.execute(dao.sessionFactory,
+                                                           true,
+                                                           dao::select,
+                                                           querySpec,
+                                                           "scatterGather",
+                                                           shardId);
+                    }
+                    catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }).flatMap(Collection::stream).collect(Collectors.toList());
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll down in ascending order of the
+     * 'sortFieldName' field. Newly added records can be polled by passing the pointer repeatedly. If nothing new is
+     * available, it will return an empty set of results.
+     * If the passed pointer is null, it will return the first pageSize records with a pointer to be passed to get the
+     * next pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll down
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Page size of scroll result
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    public ScrollResult<T> scrollDown(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        log.trace("Scroll Pointer: {}", inPointer);
+        val pointer = inPointer == null ? new ScrollPointer(ScrollPointer.Direction.DOWN) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.DOWN),
+                                    "A down scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.asc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollDown");
+    }
+
+    /**
+     * Provides a scroll api for records across shards. This api will scroll up in descending order of the
+     * 'sortFieldName' field.
+     * As this api goes back in order, newly added records will not be available in the scroll.
+     * If the passed pointer is null, it will return the last pageSize records with a pointer to be passed to get the
+     * previous pageSize set of records.
+     * <p>
+     * NOTES:
+     * - Do not modify the criteria between subsequent calls
+     * - It is important to provide a sort field that is perpetually increasing
+     * - Pointer returned can be used to _only_ scroll up
+     *
+     * @param inCriteria    The core criteria for the query
+     * @param inPointer     Existing {@link ScrollPointer}, should be null at start of a scroll session
+     * @param pageSize      Count of records per shard
+     * @param sortFieldName Field to sort by. For correct sorting, the field needs to be an ever-increasing one
+     * @return A {@link ScrollResult} object that contains a {@link ScrollPointer} and a list of results with
+     * max N * pageSize elements
+     */
+    @SneakyThrows
+    public ScrollResult<T> scrollUp(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer inPointer,
+            final int pageSize,
+            @NonNull final String sortFieldName) {
+        val pointer = null == inPointer ? new ScrollPointer(ScrollPointer.Direction.UP) : inPointer;
+        Preconditions.checkArgument(pointer.getDirection().equals(ScrollPointer.Direction.UP),
+                                    "An up scroll pointer needs to be passed to this method");
+        return scrollImpl(inCriteria,
+                          pointer,
+                          pageSize,
+                          criteria -> criteria.addOrder(Order.desc(sortFieldName)),
+                          new FieldComparator<T>(FieldUtils.getField(this.entityClass, sortFieldName, true))
+                                  .reversed()
+                                  .thenComparing(ScrollResultItem::getShardIdx),
+                          "scrollUp");
     }
 
     /**
@@ -631,11 +820,52 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .mapToObj(shardId -> {
                     val dao = daos.get(shardId);
                     try {
-                        return transactionExecutor.execute(dao.sessionFactory, true, dao::count, criteria, "count", shardId);
-                    } catch (Exception e) {
+                        return transactionExecutor.execute(dao.sessionFactory,
+                                                           true,
+                                                           dao::count,
+                                                           criteria,
+                                                           "count",
+                                                           shardId);
+                    }
+                    catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }).collect(Collectors.toList());
+    }
+
+    /**
+     * Run arbitrary read-only queries on all shards and return results.
+     *
+     * @param criteria The detached criteria. Typically, a grouping or counting query
+     * @return A map of shard vs result-list
+     */
+    @SuppressWarnings("rawtypes")
+    public Map<Integer, List> run(DetachedCriteria criteria) {
+        return run(criteria, Function.identity());
+    }
+
+    /**
+     * Run read-only queries on all shards and transform them into required types
+     *
+     * @param criteria   The detached criteria. Typically, a grouping or counting query
+     * @param translator A method to transform results to required type
+     * @param <U>        Return type
+     * @return Translated result
+     */
+    @SuppressWarnings("rawtypes")
+    public <U> U run(DetachedCriteria criteria, Function<Map<Integer, List>, U> translator) {
+        val output = IntStream.range(0, daos.size())
+                .boxed()
+                .collect(Collectors.toMap(Function.identity(), shardId -> {
+                    final LookupDaoPriv dao = daos.get(shardId);
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       dao::run,
+                                                       criteria,
+                                                       "run",
+                                                       shardId);
+                }));
+        return translator.apply(output);
     }
 
     /**
@@ -659,10 +889,11 @@ public class LookupDao<T> implements ShardedDao<T> {
                 DetachedCriteria criteria = DetachedCriteria.forClass(entityClass)
                         .add(Restrictions.in(keyField.getName(), lookupKeysGroupByShards.get(shardId)));
                 return transactionExecutor.execute(daos.get(shardId).sessionFactory,
-                        true,
-                        daos.get(shardId)::select,
-                        criteria, "get", shardId);
-            } catch (Exception e) {
+                                                   true,
+                                                   daos.get(shardId)::select,
+                                                   criteria, "get", shardId);
+            }
+            catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }).flatMap(Collection::stream).collect(Collectors.toList());
@@ -680,12 +911,37 @@ public class LookupDao<T> implements ShardedDao<T> {
      * @param id      The ID used to determine the shard where the session will be acquired.
      * @param handler A function that takes a database session and returns a result of type U.
      * @return The result of executing the handler function within the acquired database session.
-     * @throws java.lang.RuntimeException If an error occurs during database session management or while executing the handler.
+     * @throws java.lang.RuntimeException If an error occurs during database session management or while executing
+     * the handler.
      */
     public <U> U runInSession(String id, Function<Session, U> handler) {
         int shardId = shardCalculator.shardId(id);
         LookupDaoPriv dao = daos.get(shardId);
         return transactionExecutor.execute(dao.sessionFactory, true, handler, true, "runInSession", shardId);
+    }
+
+    public <U, V> V runInSession(
+            BiFunction<Integer, Session, U> sessionHandler,
+            Function<Map<Integer, U>, V> translator) {
+        val output = IntStream.range(0, daos.size())
+                .boxed()
+                .collect(Collectors.toMap(Function.identity(), shardId -> {
+                    final LookupDaoPriv dao = daos.get(shardId);
+                    try {
+                        return transactionExecutor.execute(dao.sessionFactory,
+                                                           true,
+                                                           (Function<Session, U>) currSession -> sessionHandler.apply(
+                                                                   shardId,
+                                                                   currSession),
+                                                           true,
+                                                           "runInSession",
+                                                           shardId);
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }));
+        return translator.apply(output);
     }
 
     /**
@@ -701,13 +957,17 @@ public class LookupDao<T> implements ShardedDao<T> {
      */
     public boolean delete(String id) {
         int shardId = shardCalculator.shardId(id);
-        return transactionExecutor.execute(daos.get(shardId).sessionFactory, false, daos.get(shardId)::delete, id, "delete",
-                shardId);
+        return transactionExecutor.execute(daos.get(shardId).sessionFactory,
+                                           false,
+                                           daos.get(shardId)::delete,
+                                           id,
+                                           "delete",
+                                           shardId);
     }
 
     /**
      * Retrieves the key field associated with the entity class.
-     *
+     * <p>
      * This method returns the Field object representing the key field associated with the entity class.
      *
      * @return The Field object representing the key field of the entity class.
@@ -801,10 +1061,12 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Read and augment parent entities based on a QuerySpec, retrieving a single related entity and applying operation.
+         * Read and augment parent entities based on a QuerySpec, retrieving a single related entity and applying
+         * operation.
          *
          * <p>This method reads and augments parent entities based on the specified {@code querySpec}, retrieving only a
-         * single child entity, and then applies the provided {@code consumer} function to augment parent with the retrieved
+         * single child entity, and then applies the provided {@code consumer} function to augment parent with the
+         * retrieved
          * child entity.</p>
          *
          * @param <U>           The type of child entities.
@@ -824,7 +1086,8 @@ public class LookupDao<T> implements ShardedDao<T> {
         /**
          * Read and augment parent entities based on a DetachedCriteria and apply operations selectively.
          *
-         * <p>This method augments parent entities based on the child entities selected through specified {@code criteria}
+         * <p>This method augments parent entities based on the child entities selected through specified {@code
+         * criteria}
          * The provided {@code consumer} function is then applied to augment the selected parent
          * entity with related child entities.</p>
          *
@@ -847,10 +1110,13 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Read and augment parent entities based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and apply operations selectively.
+         * Read and augment parent entities based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and
+         * apply operations selectively.
          *
-         * <p>This method augments parent entity based on the child entities selected through specified {@link io.appform.dropwizard.sharding.query.QuerySpec}
-         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         * <p>This method augments parent entity based on the child entities selected through specified
+         * {@link io.appform.dropwizard.sharding.query.QuerySpec}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related
+         * child entities.</p>
          *
          * @param <U>           The type of child entities.
          * @param relationalDao The relational data access object used to retrieve child entities.
@@ -871,20 +1137,25 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Read and augment parent entity based on a {@link org.hibernate.criterion.DetachedCriteria} and apply operations selectively.
+         * Read and augment parent entity based on a {@link org.hibernate.criterion.DetachedCriteria} and apply
+         * operations selectively.
          *
-         * <p>This method augments parent entity based on the single child entity selected through specified {@link org.hibernate.criterion.DetachedCriteria}
-         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         * <p>This method augments parent entity based on the single child entity selected through specified
+         * {@link org.hibernate.criterion.DetachedCriteria}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related
+         * child entities.</p>
          * The filter function selectively applies the consumer function to the chosen parent entity.
          *
          * @param <U>           The type of child entities.
          * @param relationalDao The relational data access object used to retrieve child entities.
          * @param criteria      The DetachedCriteria for selecting parent entities.
          * @param consumer      A function that applies the child entity augmentation to the parent entity.
-         * @param filter        A predicate function to filter the parent entity on which the consumer function is applied.
+         * @param filter        A predicate function to filter the parent entity on which the consumer function is
+         *                      applied.
          * @return This {@code ReadOnlyContext} instance to allow for method chaining.
          * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
-         *                          {@code readOneAugmentParent} method that accepts a {@code QuerySpec} for better query composition and
+         *                          {@code readOneAugmentParent} method that accepts a {@code QuerySpec} for better
+         *                          query composition and
          *                          type-safety.
          */
         public <U> ReadOnlyContext<T> readOneAugmentParent(
@@ -896,17 +1167,21 @@ public class LookupDao<T> implements ShardedDao<T> {
         }
 
         /**
-         * Read and augment parent entity based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and apply operations selectively.
+         * Read and augment parent entity based on a {@link io.appform.dropwizard.sharding.query.QuerySpec} and apply
+         * operations selectively.
          *
-         * <p>This method augments parent entity based on the single child entity selected through specified {@link io.appform.dropwizard.sharding.query.QuerySpec}
-         * The provided {@code consumer} function is then applied to augment the selected parent entity with related child entities.</p>
+         * <p>This method augments parent entity based on the single child entity selected through specified
+         * {@link io.appform.dropwizard.sharding.query.QuerySpec}
+         * The provided {@code consumer} function is then applied to augment the selected parent entity with related
+         * child entities.</p>
          * The filter function selectively applies the consumer function to the chosen parent entity.
          *
          * @param <U>           The type of child entities.
          * @param relationalDao The relational data access object used to retrieve child entities.
          * @param querySpec     The query specification for selecting parent entities.
          * @param consumer      A function that applies the child entity augmentation to the parent entity.
-         * @param filter        A predicate function to filter the parent entity on which the consumer function is applied.
+         * @param filter        A predicate function to filter the parent entity on which the consumer function is
+         *                      applied.
          * @return This {@code ReadOnlyContext} instance to allow for method chaining.
          * @throws RuntimeException if an error occurs during the read operation or when applying the consumer function.
          */
@@ -929,7 +1204,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 if (filter.test(parent)) {
                     try {
                         consumer.accept(parent, relationalDao.select(this, criteria, first, numResults));
-                    } catch (Exception e) {
+                    }
+                    catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }
@@ -967,7 +1243,8 @@ public class LookupDao<T> implements ShardedDao<T> {
                 if (filter.test(parent)) {
                     try {
                         consumer.accept(parent, relationalDao.select(this, querySpec, first, numResults));
-                    } catch (Exception e) {
+                    }
+                    catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }
@@ -987,7 +1264,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return An optional containing the retrieved entity, or an empty optional if not found.
          */
         public Optional<T> execute() {
-            T result = executeImpl();
+            var result = executeImpl();
             if (null == result
                     && null != entityPopulator
                     && Boolean.TRUE.equals(entityPopulator.get())) {//Try to populate entity (maybe from cold store etc)
@@ -1009,7 +1286,9 @@ public class LookupDao<T> implements ShardedDao<T> {
          */
         private T executeImpl() {
             return observer.execute(executionContext, () -> {
-                TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
+                TransactionHandler transactionHandler = new TransactionHandler(sessionFactory,
+                                                                               true,
+                                                                               this.skipTransaction);
                 transactionHandler.beforeStart();
                 try {
                     T result = getter.apply(key);
@@ -1017,13 +1296,50 @@ public class LookupDao<T> implements ShardedDao<T> {
                         operations.forEach(operation -> operation.apply(result));
                     }
                     return result;
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     transactionHandler.onError();
                     throw e;
-                } finally {
+                }
+                finally {
                     transactionHandler.afterEnd();
                 }
             });
         }
+    }
+
+    @SneakyThrows
+    private ScrollResult<T> scrollImpl(
+            final DetachedCriteria inCriteria,
+            final ScrollPointer pointer,
+            final int pageSize,
+            final UnaryOperator<DetachedCriteria> criteriaMutator,
+            final Comparator<ScrollResultItem<T>> comparator,
+            String methodName) {
+        val daoIndex = new AtomicInteger();
+        val results = daos.stream()
+                .flatMap(dao -> {
+                    val currIdx = daoIndex.getAndIncrement();
+                    val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
+                    return transactionExecutor.execute(dao.sessionFactory,
+                                                       true,
+                                                       queryCriteria -> dao.select(
+                                                               queryCriteria,
+                                                               pointer.getCurrOffset(currIdx),
+                                                               pageSize),
+                                                       criteria, methodName, currIdx)
+                            .stream()
+                            .map(item -> new ScrollResultItem<>(item, currIdx));
+                })
+                .sorted(comparator)
+                .limit(pageSize)
+                .collect(Collectors.toList());
+        //This list will be of _pageSize_ long but max fetched might be _pageSize_ * numShards long
+        val outputBuilder = ImmutableList.<T>builder();
+        results.forEach(result -> {
+            outputBuilder.add(result.getData());
+            pointer.advance(result.getShardIdx(), 1);// will get advanced
+        });
+        return new ScrollResult<>(pointer, outputBuilder.build());
     }
 }
