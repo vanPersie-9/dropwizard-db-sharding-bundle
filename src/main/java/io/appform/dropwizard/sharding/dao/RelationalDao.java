@@ -599,7 +599,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     @Builder
     @Getter
-    public static class QueryAssociationSpec {
+    public static class QueryFilterSpec {
         private String parentMappingKey;
         private String childMappingKey;
 
@@ -648,17 +648,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
         public <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
-                final List<QueryAssociationSpec> associations,
+                final List<QueryFilterSpec> queryFilterSpecs,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer) {
-            return readAugmentParent(relationalDao, criteria, associations, first, numResults, consumer, p -> true);
+            return readAugmentParent(relationalDao, criteria, queryFilterSpecs, first, numResults, consumer, p -> true);
         }
 
         private <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final DetachedCriteria criteria,
-                final List<QueryAssociationSpec> associations,
+                final List<QueryFilterSpec> queryFilterSpecs,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer,
@@ -670,8 +670,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     }
                     try {
                         DetachedCriteria calculatedCriteria;
-                        if (CollectionUtils.isNotEmpty(associations)) {
-                            calculatedCriteria = buildCriteriaWithAssociationSpec(relationalDao.getEntityClass(), parent, associations);
+                        if (CollectionUtils.isNotEmpty(queryFilterSpecs)) {
+                            calculatedCriteria = buildCriteriaWithAssociationSpec(relationalDao.getEntityClass(), parent, queryFilterSpecs);
                         } else {
                             calculatedCriteria = criteria;
                         }
@@ -686,9 +686,9 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         private <U> DetachedCriteria buildCriteriaWithAssociationSpec(final Class<U> entityClass,
                                                                       final T parent,
-                                                                      final List<QueryAssociationSpec> associations) {
+                                                                      final List<QueryFilterSpec> queryFilterSpecs) {
             val criteria = DetachedCriteria.forClass(entityClass);
-            for (QueryAssociationSpec spec : associations) {
+            for (QueryFilterSpec spec : queryFilterSpecs) {
                 criteria.add(Restrictions.eq(spec.getChildMappingKey(), extractParentValue(parent, spec.getParentMappingKey())));
             }
             return criteria;

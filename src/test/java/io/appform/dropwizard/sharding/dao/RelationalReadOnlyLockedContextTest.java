@@ -147,13 +147,14 @@ public class RelationalReadOnlyLockedContextTest {
         // USE CASE 1 : Using Association Key Annotations
         val criteria = DetachedCriteria.forClass(Company.class)
                 .add(Restrictions.in("companyId", Sets.newHashSet(company1.getCompanyId(), company2.getCompanyId())));
-        val assosicationSpec = Lists.newArrayList(
-                RelationalDao.QueryAssociationSpec.builder().childMappingKey("companyExtId").parentMappingKey("companyUsageId").build()
+        // Filter Spec instead of association
+        val filterSpecs = Lists.newArrayList(
+                RelationalDao.QueryFilterSpec.builder().childMappingKey("companyExtId").parentMappingKey("companyUsageId").build()
         );
 
         val dataList = companyRelationalDao.readOnlyExecutor(parentKey, criteria, 0, 4)
-                .readAugmentParent(departmentRelationalDao, null, assosicationSpec, 0, Integer.MAX_VALUE, Company::setDepartments)
-                .readAugmentParent(ceoRelationalDao, null, assosicationSpec, 0, Integer.MAX_VALUE, (parent, childList) -> {
+                .readAugmentParent(departmentRelationalDao, null, filterSpecs, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(ceoRelationalDao, null, filterSpecs, 0, Integer.MAX_VALUE, (parent, childList) -> {
                     parent.setCeo(childList.stream().findAny().orElse(null));
                 })
                 .execute()
