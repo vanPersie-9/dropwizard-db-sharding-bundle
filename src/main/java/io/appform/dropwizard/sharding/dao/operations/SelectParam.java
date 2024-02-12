@@ -12,6 +12,7 @@ public class SelectParam<T> {
 
   public DetachedCriteria criteria;
   public QuerySpec<T, T> querySpec;
-  public int start;
-  public int numRows;
+
+  public Integer start;
+  public Integer numRows;
 }

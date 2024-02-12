@@ -520,9 +520,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         val opContext = Select.<T, List<T>>builder()
             .getter(dao::select)
-            .criteria(criteria)
-            .start(start)
-            .numRows(numResults).build();
+            .selectParam(SelectParam.<T>builder()
+                .criteria(criteria)
+                .start(start)
+                .numRows(numResults)
+                .build())
+            .build();
         return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId());
     }
 
@@ -544,9 +547,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         val opContext = Select.<T, List<T>>builder()
             .getter(dao::select)
-            .querySpec(querySpec)
-            .start(start)
-            .numRows(numResults).build();
+            .selectParam(SelectParam.<T>builder()
+                .querySpec(querySpec)
+                .start(start)
+                .numRows(numResults)
+                .build())
+            .build();
         return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId(), false);
     }
 
@@ -1057,10 +1063,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
         RelationalDaoPriv dao = daos.get(shardId);
         val opContext = Select.<T, U>builder()
             .getter(dao::select)
-            .criteria(criteria)
-            .start(start)
-            .numRows(numResults)
-            .afterSelect(handler).build();
+            .selectParam(SelectParam.<T>builder()
+                .criteria(criteria)
+                .start(start)
+                .numRows(numResults)
+                .build())
+            .afterSelect(handler)
+            .build();
         return transactionExecutor.execute(dao.sessionFactory,
             true,
             "select",
@@ -1097,17 +1106,15 @@ public class RelationalDao<T> implements ShardedDao<T> {
             Function<List<T>, U> handler) throws Exception {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        SelectParam<T> selectParam = SelectParam.<T>builder()
+        val opContext = Select.<T, U>builder()
+            .getter(dao::select)
+            .selectParam(SelectParam.<T>builder()
                 .querySpec(querySpec)
                 .start(start)
                 .numRows(numResults)
-                .build();
-        val opContext = Select.<T, U>builder()
-            .getter(dao::select)
-            .querySpec(querySpec)
-            .start(start)
-            .numRows(numResults)
-            .afterSelect(handler).build();
+                .build())
+            .afterSelect(handler)
+            .build();
         return transactionExecutor.execute(dao.sessionFactory,
             true,
             "select",
@@ -1198,9 +1205,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 try {
                     val opContext = Select.<T, List<T>>builder()
                         .getter(dao::select)
-                        .criteria(criteria)
-                        .start(start)
-                        .numRows(numRows).build();
+                        .selectParam(SelectParam.<T>builder()
+                            .criteria(criteria)
+                            .start(start)
+                            .numRows(numRows)
+                            .build())
+                        .build();
                     return transactionExecutor.execute(dao.sessionFactory,
                         true,
                         "scatterGather",
@@ -1231,9 +1241,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     try {
                         val opContext = Select.<T, List<T>>builder()
                             .getter(dao::select)
-                            .querySpec(querySpec)
-                            .start(start)
-                            .numRows(numRows).build();
+                            .selectParam(SelectParam.<T>builder()
+                                .querySpec(querySpec)
+                                .start(start)
+                                .numRows(numRows)
+                                .build())
+                            .build();
                         return transactionExecutor.execute(dao.sessionFactory,
                             true,
                             "scatterGather",
@@ -1265,9 +1278,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
                     val opContext = Select.<T, List<T>>builder()
                         .getter(dao::select)
-                        .start(pointer.getCurrOffset(currIdx))
-                        .numRows(pageSize)
-                        .criteria(criteria).build();
+                        .selectParam(SelectParam.<T>builder()
+                            .criteria(criteria)
+                            .start(pointer.getCurrOffset(currIdx))
+                            .numRows(pageSize)
+                            .build())
+                        .build();
                     return transactionExecutor
                             .execute(dao.sessionFactory, true,
                                 methodName, opContext, currIdx)

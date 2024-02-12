@@ -236,19 +236,19 @@ public class LookupDao<T> implements ShardedDao<T> {
         List<T> select(SelectParam selectParam) {
             if (selectParam.criteria != null) {
                 val criteria = selectParam.criteria.getExecutableCriteria(currentSession());
-                if (-1 != selectParam.getStart()) {
+                if (null != selectParam.getStart()) {
                     criteria.setFirstResult(selectParam.start);
                 }
-                if (-1 != selectParam.getNumRows()) {
+                if (null != selectParam.getNumRows()) {
                     criteria.setMaxResults(selectParam.numRows);
                 }
                 return list(criteria);
             }
             val query = InternalUtils.createQuery(currentSession(), entityClass, selectParam.querySpec);
-            if (-1 != selectParam.getStart()) {
+            if (null != selectParam.getStart()) {
                 query.setFirstResult(selectParam.start);
             }
-            if (-1 != selectParam.getNumRows()) {
+            if (null != selectParam.getNumRows()) {
                 query.setMaxResults(selectParam.numRows);
             }
             return list(query);
@@ -713,7 +713,11 @@ public class LookupDao<T> implements ShardedDao<T> {
                     try {
                         val dao = daos.get(shardId);
                         val opContext= Select.<T, List<T>>builder()
-                            .getter(dao::select).criteria(criteria).build();
+                            .getter(dao::select)
+                            .selectParam(SelectParam.<T>builder()
+                                    .criteria(criteria)
+                                    .build())
+                            .build();
                         return transactionExecutor.execute(dao.sessionFactory,
                                                            true, "scatterGather", opContext,
                                                            shardId);
@@ -1346,9 +1350,12 @@ public class LookupDao<T> implements ShardedDao<T> {
                     val criteria = criteriaMutator.apply(InternalUtils.cloneObject(inCriteria));
                     val opContext = Select.<T, List<T>>builder()
                         .getter(dao::select)
-                        .start(pointer.getCurrOffset(currIdx))
-                        .numRows(pageSize)
-                        .criteria(criteria).build();
+                        .selectParam(SelectParam.<T>builder()
+                            .criteria(criteria)
+                            .start(pointer.getCurrOffset(currIdx))
+                            .numRows(pageSize)
+                            .build())
+                        .build();
                     return transactionExecutor.execute(dao.sessionFactory,
                                                        true, methodName,
                                                        opContext, currIdx)
