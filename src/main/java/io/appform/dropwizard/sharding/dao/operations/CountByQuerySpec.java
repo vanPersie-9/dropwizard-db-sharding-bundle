@@ -25,7 +25,7 @@ public class CountByQuerySpec extends OpContext<Long> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.COUNT_BY_QUERY_SPEC;
   }
 

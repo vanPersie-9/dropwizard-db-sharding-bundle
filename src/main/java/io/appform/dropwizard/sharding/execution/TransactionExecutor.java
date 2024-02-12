@@ -47,15 +47,20 @@ public class TransactionExecutor {
         this.observer = observer;
     }
 
-    public <T> T execute(SessionFactory sessionFactory, boolean readOnly, String commandName,
+    public <T> T execute(SessionFactory sessionFactory,
+        boolean readOnly,
+        String commandName,
         OpContext<T> opContext,
         int shardId) {
         return execute(sessionFactory, readOnly, commandName, opContext, shardId, true);
     }
 
-    public <T> T execute(SessionFactory sessionFactory, boolean readOnly, String commandName,
+    public <T> T execute(SessionFactory sessionFactory,
+        boolean readOnly,
+        String commandName,
         OpContext<T> opContext,
-        int shardId, boolean completeTransaction) {
+        int shardId,
+        boolean completeTransaction) {
         val context = TransactionExecutionContext.builder()
             .commandName(commandName)
             .daoClass(daoClass)

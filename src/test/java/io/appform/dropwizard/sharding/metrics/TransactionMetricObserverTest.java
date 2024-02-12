@@ -105,7 +105,7 @@ class TransactionMetricObserverTest {
                 .daoClass(context.getDaoClass())
                 .lockedContextMode(context.getOpContext() instanceof LockAndExecute ?
                     ((LockAndExecute)context.getOpContext()).getMode().name() : null)
-                .opType(context.getCommandName())
+                .commandName(context.getCommandName())
                 .build()));
 
         assertEquals(1, transactionMetricObserver.getShardMetricCache().size());

@@ -26,7 +26,7 @@ public class DeleteByLookupKey extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.DELETE_BY_LOOKUP_KEY;
   }
 

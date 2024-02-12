@@ -26,7 +26,6 @@ import io.appform.dropwizard.sharding.dao.operations.RunInSession;
 import io.appform.dropwizard.sharding.dao.operations.RunWithCriteria;
 import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.operations.SelectAndUpdate;
-import io.appform.dropwizard.sharding.dao.operations.SelectByQuerySpec;
 import io.appform.dropwizard.sharding.dao.operations.UpdateAll;
 import io.appform.dropwizard.sharding.dao.operations.UpdateByQuery;
 import io.appform.dropwizard.sharding.dao.operations.Count;
@@ -49,7 +48,6 @@ import io.appform.dropwizard.sharding.scroll.ScrollResultItem;
 import io.appform.dropwizard.sharding.utils.InternalUtils;
 import io.appform.dropwizard.sharding.utils.ShardCalculator;
 import io.dropwizard.hibernate.AbstractDAO;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.SneakyThrows;
@@ -447,14 +445,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
     <U> boolean update(
             LockedContext<U> context,
             DetachedCriteria criteria,
-            Function<T, T> updater,
+            UnaryOperator<T> updater,
             BooleanSupplier updateNext) {
         val dao = daos.get(context.getShardId());
         val opContext = UpdateWithScroll.<T>builder()
-            .scroller(dao::scroll)
+            .scroll(dao::scroll)
             .scrollParam(ScrollParam.<T>builder()
-            .criteria(criteria)
-            .build())
+                .criteria(criteria)
+                .build())
             .mutator(updater)
             .updater(dao::update)
             .updateNext(updateNext)
@@ -489,11 +487,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
     <U> boolean update(
             LockedContext<U> context,
             QuerySpec<T, T> querySpec,
-            Function<T, T> updater,
+            UnaryOperator<T> updater,
             BooleanSupplier updateNext) {
         val dao = daos.get(context.getShardId());
         val opContext = UpdateWithScroll.<T>builder()
-            .scroller(dao::scroll)
+            .scroll(dao::scroll)
             .scrollParam(ScrollParam.<T>builder()
                 .querySpec(querySpec)
                 .build())
@@ -526,7 +524,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 .numRows(numResults)
                 .build())
             .build();
-        return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId());
+        return transactionExecutor.execute(context.getSessionFactory(), true,
+            "select", opContext, context.getShardId(), false);
     }
 
 
@@ -726,7 +725,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public boolean update(String parentKey, DetachedCriteria criteria, Function<T, T> updater) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
-        val  selectParam = SelectParam.builder()
+        val  selectParam = SelectParam.<T>builder()
             .criteria(criteria)
             .start(0)
             .numRows(1)

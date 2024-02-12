@@ -8,6 +8,6 @@ import lombok.Value;
 public class EntityOpMetricKey {
     Class<?> entityClass;
     Class<?> daoClass;
-    String opType;
+    String commandName;
     String lockedContextMode;
 }

@@ -10,6 +10,13 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
+/**
+ * Queries a list of entities with given selectParam.
+ * Optional afterSelect function to mutate the selected entities before returning.
+ *
+ * @param <T> Type of entity to be queried.
+ * @param <R> Return type of the operation after performing any afterSave method.
+ */
 @Data
 @SuperBuilder
 public class Select<T, R> extends OpContext<R> {
@@ -29,7 +36,7 @@ public class Select<T, R> extends OpContext<R> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.SELECT;
   }
 

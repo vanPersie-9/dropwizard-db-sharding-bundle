@@ -27,7 +27,7 @@ public class RunWithCriteria<T> extends OpContext<T> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.RUN_WITH_CRITERIA;
   }
 

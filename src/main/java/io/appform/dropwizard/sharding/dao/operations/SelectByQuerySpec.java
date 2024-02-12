@@ -28,7 +28,7 @@ public class SelectByQuerySpec<T, R> extends OpContext<R> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.SELECT_BY_QUERY_SPEC;
   }
 

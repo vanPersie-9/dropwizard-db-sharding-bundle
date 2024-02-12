@@ -8,7 +8,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
- * Performs update operation with named query and returns count of updations.
+ * Performs update operation with named query and returns count of updates.
  */
 @Data
 @SuperBuilder
@@ -25,7 +25,7 @@ public class UpdateByQuery extends OpContext<Integer> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.UPDATE_BY_QUERY;
   }
 

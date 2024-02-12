@@ -16,7 +16,7 @@ import org.hibernate.Session;
 public class RunInSession<T> extends OpContext<T> {
 
   @NonNull
-  Function<Session, T> handler;
+  private Function<Session, T> handler;
 
   @Override
   public T apply(Session session) {
@@ -24,7 +24,7 @@ public class RunInSession<T> extends OpContext<T> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.RUN_IN_SESSION;
   }
 

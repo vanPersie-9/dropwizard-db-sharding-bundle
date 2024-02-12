@@ -47,7 +47,7 @@ public class UpdateAll<T> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.UPDATE_ALL;
   }
 

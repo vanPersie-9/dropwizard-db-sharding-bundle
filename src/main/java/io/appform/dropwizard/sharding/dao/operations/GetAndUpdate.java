@@ -42,7 +42,7 @@ public class GetAndUpdate<T> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.GET_AND_UPDATE;
   }
 

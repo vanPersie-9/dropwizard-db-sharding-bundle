@@ -28,7 +28,7 @@ public class SaveAll<T> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.SAVE_ALL;
   }
 

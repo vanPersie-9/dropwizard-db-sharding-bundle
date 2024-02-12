@@ -52,7 +52,7 @@ public class CreateOrUpdate<T> extends OpContext<T> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.CREATE_OR_UPDATE;
   }
 

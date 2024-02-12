@@ -20,9 +20,9 @@ import org.hibernate.Session;
 public class SelectAndUpdate<T> extends OpContext<Boolean> {
 
   @NonNull
-  private SelectParam selectParam;
+  private SelectParam<T> selectParam;
   @NonNull
-  private Function<SelectParam, List<T>> selector;
+  private Function<SelectParam<T>, List<T>> selector;
   @Builder.Default
   private Function<T, T> mutator = t -> t;
   private BiConsumer<T, T> updater;
@@ -46,7 +46,7 @@ public class SelectAndUpdate<T> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.SELECT_AND_UPDATE;
   }
 

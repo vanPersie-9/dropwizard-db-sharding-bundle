@@ -24,7 +24,7 @@ public class Count extends OpContext<Long> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.COUNT;
   }
 

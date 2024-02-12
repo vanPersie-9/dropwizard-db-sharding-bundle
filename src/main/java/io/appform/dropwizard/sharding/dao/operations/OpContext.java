@@ -9,7 +9,6 @@ import io.appform.dropwizard.sharding.dao.operations.readonlycontext.ReadOnly;
 import io.appform.dropwizard.sharding.dao.operations.relationaldao.CreateOrUpdateInLockedContext;
 import java.util.function.Function;
 import lombok.Data;
-import lombok.NonNull;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
@@ -22,9 +21,7 @@ import org.hibernate.Session;
 @SuperBuilder
 public abstract class OpContext<T> implements Function<Session, T> {
 
-  @NonNull
   public abstract OpType getOpType();
-
 
   public abstract <P> P visit(OpContextVisitor<P> visitor);
 
@@ -46,7 +43,7 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
     <T> P visit(LockAndExecute<T> opContext);
 
-    <T> P visit(UpdateByQuery opContext);
+    P visit(UpdateByQuery opContext);
 
     <T> P visit(UpdateWithScroll<T> opContext);
 

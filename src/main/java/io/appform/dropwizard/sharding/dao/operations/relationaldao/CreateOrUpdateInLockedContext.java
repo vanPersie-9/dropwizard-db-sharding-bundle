@@ -62,7 +62,7 @@ public class CreateOrUpdateInLockedContext<T, U> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.CREATE_OR_UPDATE_IN_LOCKED_CONTEXT;
   }
 

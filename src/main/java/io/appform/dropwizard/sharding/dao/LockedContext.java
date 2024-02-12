@@ -438,7 +438,7 @@ public class LockedContext<T> {
     public <U> LockedContext<T> update(
             RelationalDao<U> relationalDao,
             QuerySpec<U, U> criteria,
-            Function<U, U> updater,
+            UnaryOperator<U> updater,
             BooleanSupplier updateNext) {
         return apply(parent -> {
             try {

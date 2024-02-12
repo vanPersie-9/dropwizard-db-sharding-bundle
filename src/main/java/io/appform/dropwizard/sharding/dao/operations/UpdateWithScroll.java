@@ -3,6 +3,7 @@ package io.appform.dropwizard.sharding.dao.operations;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
@@ -21,17 +22,17 @@ import org.hibernate.Session;
 public class UpdateWithScroll<T> extends OpContext<Boolean> {
 
   @NonNull
-  private ScrollParam scrollParam;
+  private ScrollParam<T> scrollParam;
   @NonNull
-  private Function<ScrollParam, ScrollableResults> scroller;
+  private Function<ScrollParam<T>, ScrollableResults> scroll;
   @Builder.Default
-  private Function<T, T> mutator = t -> t;
+  private UnaryOperator<T> mutator = t -> t;
   private BiConsumer<T, T> updater;
   private BooleanSupplier updateNext;
 
   @Override
   public Boolean apply(Session session) {
-    ScrollableResults scrollableResults = scroller.apply(scrollParam);
+    ScrollableResults scrollableResults = scroll.apply(scrollParam);
     boolean updateNextObject = true;
     try (scrollableResults) {
       while (scrollableResults.next() && updateNextObject) {
@@ -51,7 +52,7 @@ public class UpdateWithScroll<T> extends OpContext<Boolean> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.UPDATE_WITH_SCROLL;
   }
 

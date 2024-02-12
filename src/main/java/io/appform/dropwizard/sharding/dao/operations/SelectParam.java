@@ -2,7 +2,6 @@ package io.appform.dropwizard.sharding.dao.operations;
 
 import io.appform.dropwizard.sharding.query.QuerySpec;
 import lombok.Builder;
-import lombok.Data;
 import lombok.Getter;
 import org.hibernate.criterion.DetachedCriteria;
 

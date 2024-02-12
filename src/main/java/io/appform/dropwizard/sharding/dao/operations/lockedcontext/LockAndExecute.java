@@ -56,7 +56,7 @@ public class LockAndExecute<T> extends OpContext<T> {
   }
 
   @Override
-  public @NonNull OpType getOpType() {
+  public OpType getOpType() {
     return OpType.LOCK_AND_EXECUTE;
   }
 
