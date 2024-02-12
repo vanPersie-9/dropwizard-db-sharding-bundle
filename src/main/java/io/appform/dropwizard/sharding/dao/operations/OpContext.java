@@ -32,6 +32,8 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
     P visit(Count opContext);
 
+    P visit(CountByQuerySpec opContext);
+
     <T, R> P visit(Get<T, R> opContext);
 
     <T> P visit(GetAndUpdate<T> opContext);
@@ -47,6 +49,8 @@ public abstract class OpContext<T> implements Function<Session, T> {
     <T> P visit(UpdateByQuery opContext);
 
     <T> P visit(UpdateWithScroll<T> opContext);
+
+    <T> P visit(UpdateAll<T> opContext);
 
     <T> P visit(SelectAndUpdate<T> opContext);
 
@@ -68,6 +72,8 @@ public abstract class OpContext<T> implements Function<Session, T> {
     <T, U> P visit(CreateOrUpdateInLockedContext<T, U> opContext);
 
     <T, R> P visit(Select<T, R> opContext);
+
+    <T, R> P visit(SelectByQuerySpec<T, R> opContext);
 
   }
 

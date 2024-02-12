@@ -30,6 +30,7 @@ import io.appform.dropwizard.sharding.dao.testdata.entities.Phone;
 import io.appform.dropwizard.sharding.dao.testdata.entities.TestEntity;
 import io.appform.dropwizard.sharding.dao.testdata.entities.Transaction;
 import io.appform.dropwizard.sharding.observers.internal.ListenerTriggeringObserver;
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
 import io.appform.dropwizard.sharding.sharding.ShardManager;
 import io.appform.dropwizard.sharding.sharding.impl.ConsistentHashBucketIdExtractor;
@@ -45,6 +46,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Root;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -199,6 +203,25 @@ public class LookupDaoTest {
                 .add(Restrictions.eq("externalId", "testId")));
         assertTrue(results.isEmpty());
 
+        TestEntity testEntity = TestEntity.builder()
+                .externalId("testId")
+                .text("Some Text")
+                .build();
+        lookupDao.save(testEntity);
+        results = lookupDao.scatterGather(DetachedCriteria.forClass(TestEntity.class)
+                .add(Restrictions.eq("externalId", "testId")));
+        assertFalse(results.isEmpty());
+        assertEquals("Some Text",
+                results.get(0)
+                        .getText());
+    }
+
+    @Test
+    public void testScatterGatherWithQuerySpec() throws Exception {
+        List<TestEntity> results = lookupDao
+                .scatterGather((queryRoot, query, criteriaBuilder)
+                        -> query.where(criteriaBuilder.equal(queryRoot.get("externalId"), "testId")));
+        assertTrue(results.isEmpty());
         TestEntity testEntity = TestEntity.builder()
                 .externalId("testId")
                 .text("Some Text")

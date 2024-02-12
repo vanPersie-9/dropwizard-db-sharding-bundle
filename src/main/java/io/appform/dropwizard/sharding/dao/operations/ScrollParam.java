@@ -1,12 +1,15 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
+import io.appform.dropwizard.sharding.query.QuerySpec;
 import lombok.Builder;
 import lombok.Getter;
 import org.hibernate.criterion.DetachedCriteria;
 
 @Builder
-public class ScrollParam {
+@Getter
+public class ScrollParam<T> {
 
-  @Getter
   private DetachedCriteria criteria;
+  private QuerySpec<T, T> querySpec;
+
 }

@@ -33,25 +33,19 @@ public class UpdateWithScroll<T> extends OpContext<Boolean> {
   public Boolean apply(Session session) {
     ScrollableResults scrollableResults = scroller.apply(scrollParam);
     boolean updateNextObject = true;
-    try {
+    try (scrollableResults) {
       while (scrollableResults.next() && updateNextObject) {
-        final T entity = (T) scrollableResults.get(
-            0);
+        final T entity = (T) scrollableResults.get(0);
         if (null == entity) {
           return false;
         }
-        final T newEntity = mutator.apply(
-            entity);
+        final T newEntity = mutator.apply(entity);
         if (null == newEntity) {
           return false;
         }
-        updater.accept(
-            entity,
-            newEntity);
+        updater.accept(entity, newEntity);
         updateNextObject = updateNext.getAsBoolean();
       }
-    } finally {
-      scrollableResults.close();
     }
     return true;
   }

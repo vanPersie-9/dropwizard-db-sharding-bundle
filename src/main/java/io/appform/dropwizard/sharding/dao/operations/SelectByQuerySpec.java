@@ -12,35 +12,24 @@ import org.hibernate.criterion.DetachedCriteria;
 
 @Data
 @SuperBuilder
-public class Select<T, R> extends OpContext<R> {
+public class SelectByQuerySpec<T, R> extends OpContext<R> {
 
-  private DetachedCriteria criteria;
-  private QuerySpec querySpec;// #TODO:V fix this.
-
-  @Builder.Default
-  private int start = -1;
-  @Builder.Default
-  private int numRows = -1;
+  private QuerySpec<T, T> querySpec;
 
   @Builder.Default
   private Function<List<T>, R> afterSelect = t -> (R) t;
 
   @NonNull
-  private Function<SelectParam, List<T>> getter;
+  private Function<QuerySpec, List<T>> getter; //TODO:V rename to selector
 
   @Override
   public R apply(Session session) {
-    SelectParam selectParam = SelectParam.<T>builder()
-        .criteria(criteria)
-        .start(start)
-        .numRows(numRows)
-        .build();
-    return afterSelect.apply(getter.apply(selectParam));
+    return afterSelect.apply(getter.apply(querySpec));
   }
 
   @Override
   public @NonNull OpType getOpType() {
-    return OpType.SELECT;
+    return OpType.SELECT_BY_QUERY_SPEC;
   }
 
   @Override
