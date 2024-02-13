@@ -14,9 +14,9 @@ import org.hibernate.Session;
 @SuperBuilder
 public class ReadOnly<T> extends OpContext<T> {
 
-  private final String key;
-  private final List<Function<T, Void>> operations = Lists.newArrayList();
-  private final Function<String, T> getter;
+  private String key;
+  private List<Function<T, Void>> operations = Lists.newArrayList();
+  private Function<String, T> getter;
 
 
   @Override
