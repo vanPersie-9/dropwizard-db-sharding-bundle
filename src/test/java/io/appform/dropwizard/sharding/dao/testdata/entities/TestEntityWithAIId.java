@@ -20,23 +20,23 @@ package io.appform.dropwizard.sharding.dao.testdata.entities;
 import io.appform.dropwizard.sharding.sharding.LookupKey;
 import lombok.*;
 import org.hibernate.Hibernate;
-import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.persistence.*;
+import javax.validation.constraints.NotEmpty;
 import java.util.Objects;
 
 @Entity
-@Table(name = "test_entity")
+@Table(name = "test_entity_with_ai")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@NamedQueries({
-        @NamedQuery(name = "testTextUpdateQuery", query = "update TestEntity set text = :text where externalId =:externalId")})
-public class TestEntity {
-
+public class TestEntityWithAIId {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private long id;
+
     @NotEmpty
     @LookupKey
     @Column(name = "ext_id", unique = true)
@@ -54,7 +54,7 @@ public class TestEntity {
         if (o == null || Hibernate.getClass(this) != Hibernate.getClass(o)) {
             return false;
         }
-        TestEntity that = (TestEntity) o;
+        TestEntityWithAIId that = (TestEntityWithAIId) o;
         return getExternalId() != null && Objects.equals(getExternalId(), that.getExternalId());
     }
 

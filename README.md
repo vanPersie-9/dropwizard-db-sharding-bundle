@@ -149,7 +149,7 @@ The project dependencies are:
 <dependency>
     <groupId>io.appform.dropwizard.sharding</groupId>
     <artifactId>db-sharding-bundle</artifactId>
-    <version>2.0.28-8</version>
+    <version>2.1.10-3</version>
 </dependency>
 ```
 
@@ -157,3 +157,4 @@ The project dependencies are:
 
 - Package and group id has changed from `io.dropwizard.sharding` to `io.appfrom.dropwizard.sharding` from 1.3.12-3.
 - static create* methods have been replaced with instance methods from 1.3.13-4
+- Java compatibility moved to 11 (-release 11) from 2.1.10-1 onwards

@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TransactionMetricManagerTest {
+class TransactionMetricManagerTest {
 
     @Test
-    public void testIsMetricApplicable() {
+    void testIsMetricApplicable() {
         TransactionMetricManager metricManager = new TransactionMetricManager(null, null);
         assertFalse(metricManager.isMetricApplicable(this.getClass()));
 
@@ -40,50 +40,7 @@ public class TransactionMetricManagerTest {
     }
 
     @Test
-    public void testGetDaoMetricPrefix() {
-        val metricManager = new TransactionMetricManager(null, null);
-        val metricPrefix = metricManager.getDaoMetricPrefix(this.getClass());
-        assertEquals("db.sharding.operation.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest",
-                metricPrefix);
-    }
-
-    @Test
-    public void testGetDaoOpMetricData() {
-        val metricRegistry = new MetricRegistry();
-        val metricManager = new TransactionMetricManager(null, metricRegistry);
-        val metricPrefix = "test";
-        val context = TransactionExecutionContext.builder()
-                .opType("save")
-                .build();
-        val metricData = metricManager.getDaoOpMetricData(metricPrefix, context);
-        val metrics = metricRegistry.getMetrics();
-        assertEquals(4, metrics.size());
-        assertEquals(metrics.get(metricPrefix + "." + "save.latency"), metricData.getTimer());
-        assertEquals(metrics.get(metricPrefix + "." + "save.total"), metricData.getTotal());
-        assertEquals(metrics.get(metricPrefix + "." + "save.success"), metricData.getSuccess());
-        assertEquals(metrics.get(metricPrefix + "." + "save.failed"), metricData.getFailed());
-    }
-
-    @Test
-    public void testGetDaoOpMetricDataWithLockedContextMode() {
-        val metricRegistry = new MetricRegistry();
-        val metricManager = new TransactionMetricManager(null, metricRegistry);
-        val metricPrefix = "test";
-        val context = TransactionExecutionContext.builder()
-                .opType("save")
-                .lockedContextMode("read")
-                .build();
-        val metricData = metricManager.getDaoOpMetricData(metricPrefix, context);
-        val metrics = metricRegistry.getMetrics();
-        assertEquals(4, metrics.size());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.latency"), metricData.getTimer());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.total"), metricData.getTotal());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.success"), metricData.getSuccess());
-        assertEquals(metrics.get(metricPrefix + "." + "save.read.failed"), metricData.getFailed());
-    }
-
-    @Test
-    public void testGetShardMetricData() {
+    void testGetShardMetricData() {
         val metricRegistry = new MetricRegistry();
         val metricManager = new TransactionMetricManager(null, metricRegistry);
         val shardName = "test";
@@ -98,15 +55,23 @@ public class TransactionMetricManagerTest {
     }
 
     @Test
-    public void testGetEntityMetricData() {
+    void testGetEntityOpMetricData() {
+        val context = TransactionExecutionContext.builder()
+                .entityClass(this.getClass())
+                .daoClass(this.getClass())
+                .opType("read")
+                .lockedContextMode("readMode")
+                .build();
         val metricRegistry = new MetricRegistry();
         val metricManager = new TransactionMetricManager(null, metricRegistry);
-        val entityClass = this.getClass();
-        val metricData = metricManager.getEntityMetricData(entityClass);
+        val metricData = metricManager.getEntityOpMetricData(context);
         val metrics = metricRegistry.getMetrics();
         assertEquals(4, metrics.size());
 
-        val metricPrefix = "db.sharding.entity.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest.";
+        val metricPrefix = "db.sharding.entity.io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest." +
+                "io_appform_dropwizard_sharding_metrics_TransactionMetricManagerTest." +
+                "read." +
+                "readMode.";
         assertEquals(metrics.get(metricPrefix + "latency"), metricData.getTimer());
         assertEquals(metrics.get(metricPrefix + "total"), metricData.getTotal());
         assertEquals(metrics.get(metricPrefix + "success"), metricData.getSuccess());

@@ -35,6 +35,24 @@ public class CacheableRelationalDao<T> extends RelationalDao<T> {
 
     private RelationalCache<T> cache;
 
+
+    /**
+     * Constructs a CacheableRelationalDao instance for managing entities across multiple shards with caching support.
+     *
+     * This constructor initializes a CacheableRelationalDao instance, which extends the functionality of a
+     * RelationalDao, for working with entities of the specified class distributed across multiple shards.
+     * It requires a list of session factories, a shard calculator, a relational cache, a shard information provider,
+     * and a transaction observer. The entity class should designate one field as the primary key using the `@Id` annotation.
+     *
+     * @param sessionFactories A list of SessionFactory instances for database access across shards.
+     * @param entityClass The Class representing the type of entities managed by this CacheableRelationalDao.
+     * @param shardCalculator A ShardCalculator instance used to determine the shard for each operation.
+     * @param cache A RelationalCache instance for caching entity data.
+     * @param shardInfoProvider A ShardInfoProvider for retrieving shard information.
+     * @param observer A TransactionObserver for monitoring transaction events.
+     * @throws IllegalArgumentException If the entity class does not have exactly one field designated as @Id,
+     *         if the designated key field is not accessible, or if it is not of type String.
+     */
     public CacheableRelationalDao(List<SessionFactory> sessionFactories, Class<T> entityClass,
                                   ShardCalculator<String> shardCalculator,
                                   RelationalCache<T> cache,
@@ -45,6 +63,21 @@ public class CacheableRelationalDao<T> extends RelationalDao<T> {
         this.cache = cache;
     }
 
+
+    /**
+     * Retrieves an entity from the cache or the database based on the parent key and entity key.
+     *
+     * This method attempts to retrieve an entity from the cache first using the provided parent key and entity key.
+     * If the entity is found in the cache, it is returned as an Optional. If not found in the cache, the method falls
+     * back to the parent class's (superclass) `get` method to retrieve the entity from the database. If the entity is
+     * found in the database, it is added to the cache for future access. If the entity is not found in either the cache
+     * or the database, an empty Optional is returned.
+     *
+     * @param parentKey The parent key associated with the entity.
+     * @param key The key of the entity to retrieve.
+     * @return An Optional containing the retrieved entity if found, or an empty Optional if the entity is not found.
+     * @throws IllegalArgumentException If the parent key or entity key is invalid.
+     */
     @Override
     public Optional<T> get(String parentKey, Object key) {
         if (cache.exists(parentKey, key)) {
