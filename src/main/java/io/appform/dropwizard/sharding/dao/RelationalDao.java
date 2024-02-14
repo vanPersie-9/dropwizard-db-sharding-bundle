@@ -127,16 +127,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
             return uniqueResult(q.setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
-
         T get(DetachedCriteria criteria) {
             return uniqueResult(criteria.getExecutableCriteria(currentSession()));
         }
 
-        T getLocked(Object lookupKey, LockMode lockMode) {
-            return uniqueResult(currentSession()
+        T getLocked(Object lookupKey, UnaryOperator<Criteria> criteriaUpdater, LockMode lockMode) {
+            Criteria criteria = criteriaUpdater.apply(currentSession()
                     .createCriteria(entityClass)
                     .add(Restrictions.eq(keyField.getName(), lookupKey))
                     .setLockMode(lockMode));
+            return uniqueResult(criteria);
         }
 
 
@@ -174,12 +174,12 @@ public class RelationalDao<T> implements ShardedDao<T> {
             return list(query);
         }
 
-        List<T> selectWithLockMode(SelectParamPriv selectParam, LockMode lockMode) {
+        List<T> selectWithLockMode(SelectParamPriv<T> selectParam, UnaryOperator<Criteria> criteriaUpdater, LockMode lockMode) {
             val criteria = selectParam.criteria.getExecutableCriteria(currentSession());
             criteria.setFirstResult(selectParam.start);
             criteria.setMaxResults(selectParam.numRows);
             criteria.setLockMode(lockMode);
-            return list(criteria);
+            return list(criteriaUpdater.apply(criteria));
         }
 
         ScrollableResults scroll(ScrollParamPriv<T> scrollDetails) {
@@ -1475,17 +1475,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final Object key) {
-        return readOnlyExecutor(parentKey, key, () -> false);
+        return readOnlyExecutor(parentKey, key, x -> x);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final Object key,
+                                               final UnaryOperator<Criteria> criteriaUpdater) {
+        return readOnlyExecutor(parentKey, key, criteriaUpdater, null);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+                                               final Object key,
+                                               final UnaryOperator<Criteria> criteriaUpdater,
                                                final Supplier<Boolean> entityPopulator) {
-        int shardId = shardCalculator.shardId(parentKey);
-        RelationalDaoPriv dao = daos.get(shardId);
+        val shardId = shardCalculator.shardId(parentKey);
+        val dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                () -> Lists.newArrayList(dao.getLocked(key, LockMode.NONE)),
+                () -> Lists.newArrayList(dao.getLocked(key, criteriaUpdater, LockMode.NONE)),
                 entityPopulator,
                 shardingOptions.isSkipReadOnlyTransaction(),
                 shardInfoProvider,
@@ -1493,28 +1500,38 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 observer
         );
     }
+
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults, () -> false);
+        return readOnlyExecutor(parentKey, criteria, first, numResults, x -> x);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults,
+                                               final UnaryOperator<Criteria> criteriaUpdater) {
+        return readOnlyExecutor(parentKey, criteria, first, numResults, criteriaUpdater, null);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+                                               final DetachedCriteria criteria,
+                                               final int first,
+                                               final int numResults,
+                                               final UnaryOperator<Criteria> criteriaUpdater,
                                                final Supplier<Boolean> entityPopulator) {
-        int shardId = shardCalculator.shardId(parentKey);
-        RelationalDaoPriv dao = daos.get(shardId);
-        SelectParamPriv selectParam = SelectParamPriv.<T>builder()
+        val shardId = shardCalculator.shardId(parentKey);
+        val dao = daos.get(shardId);
+        val selectParam = SelectParamPriv.<T>builder()
                 .criteria(criteria)
                 .start(first)
                 .numRows(numResults)
                 .build();
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                () -> dao.selectWithLockMode(selectParam, LockMode.NONE),
+                () -> dao.selectWithLockMode(selectParam, criteriaUpdater, LockMode.NONE),
                 entityPopulator,
                 shardingOptions.isSkipReadOnlyTransaction(),
                 shardInfoProvider,
