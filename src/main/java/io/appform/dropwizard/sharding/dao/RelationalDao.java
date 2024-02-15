@@ -62,6 +62,7 @@ import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -76,6 +77,8 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static io.appform.dropwizard.sharding.query.QueryUtils.equalityFilter;
 
 /**
  * A dao used to work with entities related to a parent shard. The parent may or maynot be physically present.
@@ -172,14 +175,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
             query.setFirstResult(selectParam.start);
             query.setMaxResults(selectParam.numRows);
             return list(query);
-        }
-
-        List<T> selectWithLockMode(SelectParamPriv<T> selectParam, UnaryOperator<Criteria> criteriaUpdater, LockMode lockMode) {
-            val criteria = selectParam.criteria.getExecutableCriteria(currentSession());
-            criteria.setFirstResult(selectParam.start);
-            criteria.setMaxResults(selectParam.numRows);
-            criteria.setLockMode(lockMode);
-            return list(criteriaUpdater.apply(criteria));
         }
 
         ScrollableResults scroll(ScrollParamPriv<T> scrollDetails) {
@@ -686,6 +681,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
         SelectParamPriv selectParam = SelectParamPriv.builder()
                 .criteria(criteria)
+                .start(first)
+                .numRows(numResults)
+                .build();
+        return transactionExecutor.execute(context.getSessionFactory(), true, dao::select, selectParam, t -> t, false,
+                "select", context.getShardId());
+    }
+
+    <U> List<T> select(RelationalDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int first, int numResults) throws Exception {
+        final RelationalDaoPriv dao = daos.get(context.getShardId());
+        SelectParamPriv<T> selectParam = SelectParamPriv.<T>builder()
+                .querySpec(querySpec)
                 .start(first)
                 .numRows(numResults)
                 .build();
@@ -1505,22 +1511,13 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults, x -> x);
+        return readOnlyExecutor(parentKey, criteria, first, numResults, null);
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults,
-                                               final UnaryOperator<Criteria> criteriaUpdater) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults, criteriaUpdater, null);
-    }
-
-    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
-                                               final DetachedCriteria criteria,
-                                               final int first,
-                                               final int numResults,
-                                               final UnaryOperator<Criteria> criteriaUpdater,
                                                final Supplier<Boolean> entityPopulator) {
         val shardId = shardCalculator.shardId(parentKey);
         val dao = daos.get(shardId);
@@ -1531,7 +1528,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 .build();
         return new ReadOnlyContext<>(shardId,
                 dao.sessionFactory,
-                () -> dao.selectWithLockMode(selectParam, criteriaUpdater, LockMode.NONE),
+                () -> dao.select(selectParam),
                 entityPopulator,
                 shardingOptions.isSkipReadOnlyTransaction(),
                 shardInfoProvider,
@@ -1540,13 +1537,50 @@ public class RelationalDao<T> implements ShardedDao<T> {
         );
     }
 
+    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+                                               final QuerySpec<T, T> querySpec,
+                                               final int first,
+                                               final int numResults) {
+        return readOnlyExecutor(parentKey, querySpec, first, numResults, null);
+    }
+
+    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+                                               final QuerySpec<T, T> querySpec,
+                                               final int first,
+                                               final int numResults,
+                                               final Supplier<Boolean> entityPopulator) {
+        val shardId = shardCalculator.shardId(parentKey);
+        val dao = daos.get(shardId);
+        val selectParam = SelectParamPriv.<T>builder()
+                .querySpec(querySpec)
+                .start(first)
+                .numRows(numResults)
+                .build();
+        return new ReadOnlyContext<>(shardId,
+                dao.sessionFactory,
+                () -> dao.select(selectParam),
+                entityPopulator,
+                shardingOptions.isSkipReadOnlyTransaction(),
+                shardInfoProvider,
+                entityClass,
+                observer
+        );
+    }
 
     @Builder
     @Getter
-    public static class QueryFilterSpec {
+    public static class AssociationMappingSpec {
         private String parentMappingKey;
         private String childMappingKey;
 
+    }
+
+    @Builder
+    @Getter
+    public static class QueryFilterSpec<T> {
+        private List<AssociationMappingSpec> associationMappingSpecs;
+        private DetachedCriteria criteria;
+        private QuerySpec<T, T> querySpec;
     }
 
     @Getter
@@ -1592,18 +1626,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
         public <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
-                final DetachedCriteria criteria,
-                final List<QueryFilterSpec> queryFilterSpecs,
+                final QueryFilterSpec<U> queryFilterSpec,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer) {
-            return readAugmentParent(relationalDao, criteria, queryFilterSpecs, first, numResults, consumer, p -> true);
+            return readAugmentParent(relationalDao, queryFilterSpec, first, numResults, consumer, p -> true);
         }
 
         private <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
-                final DetachedCriteria criteria,
-                final List<QueryFilterSpec> queryFilterSpecs,
+                final QueryFilterSpec<U> queryFilterSpec,
                 final int first,
                 final int numResults,
                 final BiConsumer<T, List<U>> consumer,
@@ -1614,40 +1646,27 @@ public class RelationalDao<T> implements ShardedDao<T> {
                         return;
                     }
                     try {
-                        DetachedCriteria calculatedCriteria;
-                        if (CollectionUtils.isNotEmpty(queryFilterSpecs)) {
-                            calculatedCriteria = buildCriteriaWithAssociationSpec(relationalDao.getEntityClass(), parent, queryFilterSpecs);
-                        } else {
-                            calculatedCriteria = criteria;
+                        // Querying based on associations
+                        if (queryFilterSpec.associationMappingSpecs != null) {
+                            QuerySpec<U, U> calculatedQuerySpec = buildQuerySpecWithAssociationSpec(parent, queryFilterSpec.associationMappingSpecs);
+                            consumer.accept(parent, relationalDao.select(this, calculatedQuerySpec, first, numResults));
                         }
-                        consumer.accept(parent, relationalDao.select(this, calculatedCriteria, first, numResults));
+                        // Querying based on querySpec
+                        else if (queryFilterSpec.querySpec != null) {
+                            consumer.accept(parent, relationalDao.select(this, queryFilterSpec.querySpec, first, numResults));
+                        }
+                        // Querying based on crieria
+                        else if (queryFilterSpec.criteria != null) {
+                            consumer.accept(parent, relationalDao.select(this, queryFilterSpec.criteria, first, numResults));
+                        } else {
+                            throw new UnsupportedOperationException("Missing queryFilterSpec provided.");
+                        }
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
                 return null;
             });
-        }
-
-        private <U> DetachedCriteria buildCriteriaWithAssociationSpec(final Class<U> entityClass,
-                                                                      final T parent,
-                                                                      final List<QueryFilterSpec> queryFilterSpecs) {
-            val criteria = DetachedCriteria.forClass(entityClass);
-            for (QueryFilterSpec spec : queryFilterSpecs) {
-                criteria.add(Restrictions.eq(spec.getChildMappingKey(), extractParentValue(parent, spec.getParentMappingKey())));
-            }
-            return criteria;
-        }
-
-        private String extractParentValue(final T parent,
-                                          final String key) {
-            try {
-                val isPropertyPresent = PropertyUtils.isReadable(parent, key);
-                Preconditions.checkArgument(isPropertyPresent, "Missing property in bean");
-                return BeanUtils.getProperty(parent, key);
-            } catch (Exception e) {
-                throw new RuntimeException("Error while reading association parent value", e);
-            }
         }
 
         public Optional<List<T>> execute() {
@@ -1678,6 +1697,31 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     transactionHandler.afterEnd();
                 }
             });
+        }
+
+        private <U> QuerySpec<U,U> buildQuerySpecWithAssociationSpec(final T parent,
+                                                                     final List<AssociationMappingSpec> queryFilterSpecs) {
+            return (queryRoot, query, criteriaBuilder) -> {
+                val restrictions = queryFilterSpecs.stream()
+                        .map(spec -> {
+                            val childKey = spec.getChildMappingKey();
+                            val parentValue = extractParentValue(parent, spec.getParentMappingKey());
+                            return equalityFilter(criteriaBuilder, queryRoot, childKey, parentValue);
+                        })
+                        .toArray(javax.persistence.criteria.Predicate[]::new);
+                query.where(restrictions);
+            };
+        }
+
+        private String extractParentValue(final T parent,
+                                          final String key) {
+            try {
+                val isPropertyPresent = PropertyUtils.isReadable(parent, key);
+                Preconditions.checkArgument(isPropertyPresent, "Missing property in bean");
+                return BeanUtils.getProperty(parent, key);
+            } catch (Exception e) {
+                throw new RuntimeException("Error while reading association parent value", e);
+            }
         }
     }
 }

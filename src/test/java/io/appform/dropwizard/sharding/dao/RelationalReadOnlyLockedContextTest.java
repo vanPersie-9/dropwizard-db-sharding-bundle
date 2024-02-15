@@ -1,6 +1,5 @@
 package io.appform.dropwizard.sharding.dao;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
@@ -96,7 +95,130 @@ public class RelationalReadOnlyLockedContextTest {
 
     @Test
     @SneakyThrows
-    public void testRelationalDaoReadOnlyContext() {
+    void testRelationalDaoReadOnlyContextWithAssociations() {
+        val parentKey = "PARENT_KEY";
+        generateData(parentKey);
+
+        val companyId1 = "CMPID1";
+        val companyId2 = "CMPID2";
+
+        val parentCriteria = DetachedCriteria.forClass(Company.class)
+                .add(Restrictions.in("companyUsageId", Sets.newHashSet(companyId1, companyId2)));
+
+        val associationMappingSpecs = Lists.newArrayList(
+                RelationalDao.AssociationMappingSpec.builder().childMappingKey("companyExtId").parentMappingKey("companyUsageId").build()
+        );
+        val departmentQueryFilterSpec = RelationalDao.QueryFilterSpec.<Department>builder()
+                .associationMappingSpecs(associationMappingSpecs)
+                .build();
+        val ceoQueryFilterSpec = RelationalDao.QueryFilterSpec.<Ceo>builder()
+                .associationMappingSpecs(associationMappingSpecs)
+                .build();
+
+        val dataList = companyRelationalDao.readOnlyExecutor(parentKey, parentCriteria, 0, 4)
+                .readAugmentParent(departmentRelationalDao, departmentQueryFilterSpec, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(ceoRelationalDao, ceoQueryFilterSpec, 0, Integer.MAX_VALUE, (parent, childList) -> {
+                    parent.setCeo(childList.stream().findAny().orElse(null));
+                })
+                .execute()
+                .orElse(new ArrayList<>());
+
+        Assertions.assertNotNull(dataList);
+        Assertions.assertEquals(2, dataList.size());
+        val respCompanyOptionalCase1A = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(companyId1))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase1A.isPresent());
+        val respCompanyA = respCompanyOptionalCase1A.get();
+        Assertions.assertNotNull(respCompanyA.getCeo());
+        Assertions.assertEquals(respCompanyA.getCeo().getCompanyExtId(), companyId1);
+        Assertions.assertTrue(respCompanyA.getDepartments().stream().allMatch(e -> e.getCompanyExtId().equals(companyId1)));
+
+        val respCompanyOptionalCase1B = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(companyId2))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase1B.isPresent());
+        val respCompanyB = respCompanyOptionalCase1B.get();
+        Assertions.assertNotNull(respCompanyB.getCeo());
+        Assertions.assertEquals(respCompanyB.getCeo().getCompanyExtId(), companyId2);
+        Assertions.assertTrue(respCompanyB.getDepartments().stream().allMatch(e -> e.getCompanyExtId().equals(companyId2)));
+    }
+
+    @Test
+    @SneakyThrows
+    void testRelationalDaoReadOnlyContextWithCriteria() {
+        val parentKey = "PARENT_KEY";
+        generateData(parentKey);
+
+        val companyToRetrieve = "CMPID1";
+
+        val parentCriteria = DetachedCriteria.forClass(Company.class)
+                .add(Restrictions.eq("companyUsageId", companyToRetrieve));
+
+        val departmentQueryFilterSpec = RelationalDao.QueryFilterSpec.<Department>builder()
+                .criteria(DetachedCriteria.forClass(Department.class)
+                        .add(Restrictions.eq("companyExtId", companyToRetrieve)))
+                .build();
+
+        val ceoQueryFilterSpec = RelationalDao.QueryFilterSpec.<Ceo>builder()
+                .criteria(DetachedCriteria.forClass(Ceo.class)
+                        .add(Restrictions.eq("companyExtId", companyToRetrieve)))
+                .build();
+
+        val dataList = companyRelationalDao.readOnlyExecutor(parentKey, parentCriteria, 0, 4)
+                .readAugmentParent(departmentRelationalDao, departmentQueryFilterSpec, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(ceoRelationalDao, ceoQueryFilterSpec, 0, Integer.MAX_VALUE, (parent, childList) -> {
+                    parent.setCeo(childList.stream().findAny().orElse(null));
+                }).execute()
+                .orElse(new ArrayList<>());
+
+        Assertions.assertNotNull(dataList);
+        Assertions.assertEquals(1, dataList.size());
+        val respCompanyOptionalCase2A = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(companyToRetrieve))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase2A.isPresent());
+        val respCompanyCase2 = respCompanyOptionalCase2A.get();
+        Assertions.assertNotNull(respCompanyCase2.getCeo());
+        Assertions.assertTrue(respCompanyCase2.getDepartments().stream().allMatch(e -> e.getCompanyExtId().equals(companyToRetrieve)));
+    }
+
+    @Test
+    @SneakyThrows
+    void testRelationalDaoReadOnlyContextWithQuerySpec() {
+        val parentKey = "PARENT_KEY";
+        generateData(parentKey);
+
+        val companyToRetrieve = "CMPID1";
+
+        val departmentQueryFilterSpec = RelationalDao.QueryFilterSpec.<Department>builder()
+                .querySpec((queryRoot, query, criteriaBuilder) -> query.where(criteriaBuilder.equal(queryRoot.get("companyExtId"), companyToRetrieve)))
+                .build();
+
+        val ceoQueryFilterSpec = RelationalDao.QueryFilterSpec.<Ceo>builder()
+                .querySpec((queryRoot, query, criteriaBuilder) -> query.where(criteriaBuilder.equal(queryRoot.get("companyExtId"), companyToRetrieve)))
+                .build();
+
+        val dataList = companyRelationalDao.readOnlyExecutor(parentKey,
+                        (queryRoot, query, criteriaBuilder) -> query.where(criteriaBuilder.equal(queryRoot.get("companyUsageId"), companyToRetrieve)), 0, 1)
+                .readAugmentParent(departmentRelationalDao, departmentQueryFilterSpec, 0, Integer.MAX_VALUE, Company::setDepartments)
+                .readAugmentParent(ceoRelationalDao, ceoQueryFilterSpec, 0, Integer.MAX_VALUE, (parent, childList) -> {
+                    parent.setCeo(childList.stream().findAny().orElse(null));
+                }).execute()
+                .orElse(new ArrayList<>());
+
+        Assertions.assertNotNull(dataList);
+        Assertions.assertEquals(1, dataList.size());
+        val respCompanyOptionalCase2A = dataList.stream()
+                .filter(e -> e.getCompanyUsageId().equals(companyToRetrieve))
+                .findFirst();
+        Assertions.assertTrue(respCompanyOptionalCase2A.isPresent());
+        val respCompanyCase2 = respCompanyOptionalCase2A.get();
+        Assertions.assertNotNull(respCompanyCase2.getCeo());
+        Assertions.assertTrue(respCompanyCase2.getDepartments().stream().allMatch(e -> e.getCompanyExtId().equals(companyToRetrieve)));
+    }
+
+    private void generateData(String parentKey) {
         Company company1 = Company.builder()
                 .companyUsageId("CMPID1")
                 .companyId(1l)
@@ -130,8 +252,6 @@ public class RelationalReadOnlyLockedContextTest {
                 .name("KING-2")
                 .build();
 
-
-        String parentKey = "PARENT_KEY";
         val lockedContext1 = companyRelationalDao.saveAndGetExecutor(parentKey, company1);
         lockedContext1.save(departmentRelationalDao, eng1 -> eng);
         lockedContext1.save(departmentRelationalDao, fin1 -> fin);
@@ -142,72 +262,7 @@ public class RelationalReadOnlyLockedContextTest {
         lockedContext2.save(departmentRelationalDao, hr1 -> hr);
         lockedContext2.save(ceoRelationalDao, ceo -> ceo2);
         lockedContext2.execute();
-
-
-        // USE CASE 1 : Using Association Key Annotations
-        val criteria = DetachedCriteria.forClass(Company.class)
-                .add(Restrictions.in("companyId", Sets.newHashSet(company1.getCompanyId(), company2.getCompanyId())));
-        // Filter Spec instead of association
-        val filterSpecs = Lists.newArrayList(
-                RelationalDao.QueryFilterSpec.builder().childMappingKey("companyExtId").parentMappingKey("companyUsageId").build()
-        );
-
-        val dataList = companyRelationalDao.readOnlyExecutor(parentKey, criteria, 0, 4)
-                .readAugmentParent(departmentRelationalDao, null, filterSpecs, 0, Integer.MAX_VALUE, Company::setDepartments)
-                .readAugmentParent(ceoRelationalDao, null, filterSpecs, 0, Integer.MAX_VALUE, (parent, childList) -> {
-                    parent.setCeo(childList.stream().findAny().orElse(null));
-                })
-                .execute()
-                .orElse(new ArrayList<>());
-
-        Assertions.assertNotNull(dataList);
-        Assertions.assertEquals(2, dataList.size());
-        val respCompanyOptionalCase1A = dataList.stream()
-                .filter(e -> e.getCompanyUsageId().equals(company1.getCompanyUsageId()))
-                .findFirst();
-        Assertions.assertTrue(respCompanyOptionalCase1A.isPresent());
-        val respCompanyA = respCompanyOptionalCase1A.get();
-        Assertions.assertNotNull(respCompanyA.getCeo());
-        Assertions.assertEquals(respCompanyA.getCeo().getCompanyExtId(), company1.getCompanyUsageId());
-        Assertions.assertTrue(respCompanyA.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(company1.getCompanyUsageId())));
-        val respCompanyOptionalCase1B = dataList.stream()
-                .filter(e -> e.getCompanyUsageId().equals(company2.getCompanyUsageId()))
-                .findFirst();
-        Assertions.assertTrue(respCompanyOptionalCase1B.isPresent());
-        val respCompanyB = respCompanyOptionalCase1B.get();
-        Assertions.assertNotNull(respCompanyB.getCeo());
-        Assertions.assertEquals(respCompanyB.getCeo().getCompanyExtId(), company2.getCompanyUsageId());
-        Assertions.assertTrue(respCompanyB.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(company2.getCompanyUsageId())));
-
-
-
-        // USE CASE 2 : Not Using Association Key Annotations
-        val companyToRetrieve = company1.companyUsageId;
-        val companyCriteria = DetachedCriteria.forClass(Company.class)
-                .add(Restrictions.eq("companyUsageId", companyToRetrieve));
-
-        val deptCriteria = DetachedCriteria.forClass(Department.class)
-                .add(Restrictions.eq("companyExtId", companyToRetrieve));
-
-        val dataList2 = companyRelationalDao.readOnlyExecutor(parentKey, companyCriteria, 0, 4)
-                .readAugmentParent(departmentRelationalDao, deptCriteria, null, 0, Integer.MAX_VALUE, Company::setDepartments)
-                .execute()
-                .orElse(new ArrayList<>());
-        System.out.println(new ObjectMapper().writeValueAsString(dataList2));
-        Assertions.assertNotNull(dataList2);
-        Assertions.assertEquals(1, dataList2.size());
-        val respCompanyOptionalCase2A = dataList.stream()
-                .filter(e -> e.getCompanyUsageId().equals(companyToRetrieve))
-                .findFirst();
-        Assertions.assertTrue(respCompanyOptionalCase2A.isPresent());
-        val respCompanyCase2 = respCompanyOptionalCase2A.get();
-        Assertions.assertNotNull(respCompanyCase2.getCeo());
-        Assertions.assertTrue(respCompanyCase2.getDepartments().stream().allMatch(e-> e.getCompanyExtId().equals(companyToRetrieve)));
-
-
-
     }
-
 
     @Entity
     @Data
