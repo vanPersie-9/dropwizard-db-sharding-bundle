@@ -28,13 +28,13 @@ public class LockAndExecute<T> extends OpContext<T> {
   private Function<T, T> saver;
   private T entity;
 
-  @Builder(builderMethodName = "buildForRead")
+  @Builder(builderMethodName = "buildForRead", builderClassName = "ReadModeBuilder")
   public LockAndExecute(@NonNull Supplier<T> getter) {
     this.mode = Mode.READ;
     this.getter = getter;
   }
 
-  @Builder(builderMethodName = "buildForInsert")
+  @Builder(builderMethodName = "buildForInsert", builderClassName = "InsertModeBuilder")
   public LockAndExecute(@NonNull T entity, @NonNull Function<T, T> saver) {
     this.mode = Mode.INSERT;
     this.entity = entity;
