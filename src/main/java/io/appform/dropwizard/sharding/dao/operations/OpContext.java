@@ -6,10 +6,10 @@ import io.appform.dropwizard.sharding.dao.operations.lookupdao.DeleteByLookupKey
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetAndUpdateByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.readonlycontext.ReadOnly;
+import io.appform.dropwizard.sharding.dao.operations.relationaldao.CreateOrUpdate;
 import io.appform.dropwizard.sharding.dao.operations.relationaldao.CreateOrUpdateInLockedContext;
 import java.util.function.Function;
 import lombok.Data;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
@@ -18,9 +18,7 @@ import org.hibernate.Session;
  * @param <T> return type of the operation.
  */
 @Data
-@SuperBuilder
 public abstract class OpContext<T> implements Function<Session, T> {
-
   public abstract OpType getOpType();
 
   public abstract <P> P visit(OpContextVisitor<P> visitor);
@@ -63,14 +61,11 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
     <T> P visit(CreateOrUpdateByLookupKey<T> opContext);
 
-    <T> P visit(
-        io.appform.dropwizard.sharding.dao.operations.relationaldao.CreateOrUpdate<T> opContext);
+    <T> P visit(CreateOrUpdate<T> opContext);
 
     <T, U> P visit(CreateOrUpdateInLockedContext<T, U> opContext);
 
     <T, R> P visit(Select<T, R> opContext);
-
-    <T, R> P visit(SelectByQuerySpec<T, R> opContext);
 
   }
 

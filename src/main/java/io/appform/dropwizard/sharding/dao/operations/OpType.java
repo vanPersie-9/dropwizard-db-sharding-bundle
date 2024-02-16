@@ -1,15 +1,11 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import javax.ws.rs.GET;
-
 public enum OpType {
 
   // Read operations
   COUNT,
-
   COUNT_BY_QUERY_SPEC,
   SELECT,
-  SELECT_BY_QUERY_SPEC,
   GET,
   GET_BY_LOOKUP_KEY,
   READ_ONLY,

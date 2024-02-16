@@ -66,7 +66,9 @@ public class LockedContext<T> {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.observer = observer;
-        val opContext = LockAndExecute.<T>builder().getter(getter).mode(Mode.READ).build();
+        val opContext = LockAndExecute.<T>buildForRead()
+            .getter(getter)
+            .build();
         this.executionContext = buildExecutionContext(shardInfoProvider, entityClass, opContext);
     }
 
@@ -96,8 +98,10 @@ public class LockedContext<T> {
         this.shardId = shardId;
         this.sessionFactory = sessionFactory;
         this.observer = observer;
-        val opContext = LockAndExecute.<T>builder().saver(saver).mode(Mode.INSERT)
-            .entity(entity).build();
+        val opContext = LockAndExecute.<T>buildForInsert()
+            .saver(saver)
+            .entity(entity)
+            .build();
         this.executionContext = buildExecutionContext(shardInfoProvider, entityClass, opContext);
     }
 

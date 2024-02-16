@@ -7,34 +7,37 @@ import java.util.List;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import org.hibernate.Session;
 
 @Data
-@SuperBuilder
+@Builder
 public class ReadOnly<T> extends OpContext<T> {
 
-  private String key;
-  private List<Function<T, Void>> operations = Lists.newArrayList();
-  private Function<String, T> getter;
+    @NonNull
+    private String key;
+    @Builder.Default
+    private List<Function<T, Void>> operations = Lists.newArrayList();
+    @NonNull
+    private Function<String, T> getter;
 
 
-  @Override
-  public T apply(Session session) {
-    T result = getter.apply(key);
-    if (null != result) {
-      operations.forEach(operation -> operation.apply(result));
+    @Override
+    public T apply(Session session) {
+        T result = getter.apply(key);
+        if (null != result) {
+            operations.forEach(operation -> operation.apply(result));
+        }
+        return result;
     }
-    return result;
-  }
 
-  @Override
-  public OpType getOpType() {
-    return OpType.READ_ONLY;
-  }
+    @Override
+    public OpType getOpType() {
+        return OpType.READ_ONLY;
+    }
 
-  @Override
-  public <R> R visit(OpContextVisitor<R> visitor) {
-    return visitor.visit(this);
-  }
+    @Override
+    public <R> R visit(OpContextVisitor<R> visitor) {
+        return visitor.visit(this);
+    }
 }

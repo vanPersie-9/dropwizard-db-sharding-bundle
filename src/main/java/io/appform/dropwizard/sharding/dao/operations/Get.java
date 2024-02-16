@@ -4,17 +4,17 @@ import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
 /**
+ * Get an entity with given criteria. Apply afterGet function and return the final response.
  *
- * @param <T> Type of Dao entity
- * @param <R>
+ * @param <T> Type of entity to get.
+ * @param <R> Type of response after applying afterGet function.
  */
 @Data
-@SuperBuilder
+@Builder
 public class Get<T, R> extends OpContext<R> {
 
   @NonNull

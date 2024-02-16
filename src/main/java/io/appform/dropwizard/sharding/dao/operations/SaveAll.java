@@ -4,7 +4,7 @@ import java.util.Collection;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import org.hibernate.Session;
 
 /**
@@ -13,7 +13,7 @@ import org.hibernate.Session;
  * @param <T> Type of entity to be persisted.
  */
 @Data
-@SuperBuilder
+@Builder
 public class SaveAll<T> extends OpContext<Boolean> {
 
   @NonNull

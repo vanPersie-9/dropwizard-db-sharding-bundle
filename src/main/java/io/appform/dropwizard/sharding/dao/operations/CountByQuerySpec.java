@@ -2,21 +2,22 @@ package io.appform.dropwizard.sharding.dao.operations;
 
 import io.appform.dropwizard.sharding.query.QuerySpec;
 import java.util.function.Function;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
-import org.hibernate.criterion.DetachedCriteria;
 
 /**
- * Returns count of records matching given criteria for a shard.
+ * Returns count of records matching given query spec for a shard.
  */
 @Data
-@SuperBuilder
+@Builder
 public class CountByQuerySpec extends OpContext<Long> {
 
+  @NonNull
   private QuerySpec querySpec;
 
+  @NonNull
   private Function<QuerySpec, Long> counter;
 
   @Override

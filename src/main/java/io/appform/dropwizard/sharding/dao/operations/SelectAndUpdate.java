@@ -6,17 +6,17 @@ import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
- * Get entity by criteria, mutate it and persist to DB. Using select instead of get so it does not
- * fail in case of more than one result.
+ * Get entity by criteria, mutate it and persist to DB. This updates the first record from the
+ * resultset. This operation is similar to GetAndUpdate, but using select instead of get, so it does
+ * not fail in case of more than one result.
  *
  * @param <T> return type of the entity to be updated.
  */
 @Data
-@SuperBuilder
+@Builder
 public class SelectAndUpdate<T> extends OpContext<Boolean> {
 
   @NonNull
@@ -25,6 +25,7 @@ public class SelectAndUpdate<T> extends OpContext<Boolean> {
   private Function<SelectParam<T>, List<T>> selector;
   @Builder.Default
   private Function<T, T> mutator = t -> t;
+  @NonNull
   private BiConsumer<T, T> updater;
 
   @Override

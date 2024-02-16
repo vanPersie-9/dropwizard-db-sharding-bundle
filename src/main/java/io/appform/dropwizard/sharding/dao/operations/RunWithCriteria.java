@@ -3,17 +3,17 @@ package io.appform.dropwizard.sharding.dao.operations;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
 /**
- * Run a query with given crietria inside this shard and returns resulting list.
+ * Run a query with given criteria inside this shard and returns resulting list.
  *
  * @param <T> Return type on performing the operation.
  */
 @Data
-@SuperBuilder
+@Builder
 public class RunWithCriteria<T> extends OpContext<T> {
 
   @NonNull

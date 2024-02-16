@@ -6,25 +6,24 @@ import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
- * Get entity by criteria, mutate it and persist to DB. Using select instead of get so it does not
- * fail in case of more than one result.
+ * Get all the entities by criteria. Iterate over them, mutate it and persist to DB.
  *
  * @param <T> return type of the entity to be updated.
  */
 @Data
-@SuperBuilder
+@Builder
 public class UpdateAll<T> extends OpContext<Boolean> {
 
   @NonNull
-  private SelectParam selectParam;
+  private SelectParam<T> selectParam;
   @NonNull
-  private Function<SelectParam, List<T>> selector;
+  private Function<SelectParam<T>, List<T>> selector;
   @Builder.Default
   private Function<T, T> mutator = t -> t;
+  @NonNull
   private BiConsumer<T, T> updater;
 
   @Override

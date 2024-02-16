@@ -8,12 +8,11 @@ import java.util.function.UnaryOperator;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Criteria;
 import org.hibernate.Session;
 
 @Data
-@SuperBuilder
+@Builder
 public class GetByLookupKey<T, R> extends OpContext<R> {
 
   @NonNull

@@ -8,19 +8,20 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import lombok.val;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
 /**
- * TODO: check if this can be replaced by using LockAndExecute operation.
- * Acquire lock on an entity. If entity present, performs mutation and updates it. else creates the entity.
+ * Acquire lock on an entity.
+ * If entity present, performs mutation and updates it.
+ * Else create the entity using the given @Supplier entityGenerator.
  *
  * @param <T> Type of entity on which operation being performed.
  */
 @Data
-@SuperBuilder
+@Builder
 public class CreateOrUpdate<T> extends OpContext<T> {
 
   @NonNull DetachedCriteria criteria;
@@ -47,8 +48,6 @@ public class CreateOrUpdate<T> extends OpContext<T> {
       updater.accept(result, updated);
     }
     return getter.apply(criteria);
-
-
   }
 
   @Override

@@ -1,14 +1,11 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
-import io.appform.dropwizard.sharding.query.QuerySpec;
 import java.util.List;
 import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
-import org.hibernate.criterion.DetachedCriteria;
 
 /**
  * Queries a list of entities with given selectParam.
@@ -18,7 +15,7 @@ import org.hibernate.criterion.DetachedCriteria;
  * @param <R> Return type of the operation after performing any afterSave method.
  */
 @Data
-@SuperBuilder
+@Builder
 public class Select<T, R> extends OpContext<R> {
 
   @NonNull

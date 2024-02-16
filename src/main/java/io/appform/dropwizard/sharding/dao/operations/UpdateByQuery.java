@@ -2,16 +2,17 @@ package io.appform.dropwizard.sharding.dao.operations;
 
 import io.appform.dropwizard.sharding.dao.UpdateOperationMeta;
 import java.util.function.Function;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;;
 import org.hibernate.Session;
 
 /**
  * Performs update operation with named query and returns count of updates.
  */
 @Data
-@SuperBuilder
+@Builder
 public class UpdateByQuery extends OpContext<Integer> {
 
   @NonNull

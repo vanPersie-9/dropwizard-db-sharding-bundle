@@ -5,7 +5,6 @@ import java.util.function.Function;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
@@ -16,7 +15,7 @@ import org.hibernate.criterion.DetachedCriteria;
  * @param <T> Type of entity to get and update.
  */
 @Data
-@SuperBuilder
+@Builder
 public class GetAndUpdate<T> extends OpContext<Boolean> {
 
   @NonNull

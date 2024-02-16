@@ -114,7 +114,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
          */
 
         T get(final Object lookupKey) {
-            val q = createQuery(currentSession(),
+            val q = InternalUtils.createQuery(currentSession(),
                                 entityClass,
                                 (queryRoot, query, criteriaBuilder) ->
                                         query.where(criteriaBuilder.equal(queryRoot.get(keyField.getName()),
@@ -137,7 +137,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
          *                  row selection
          */
         T getLockedForWrite(final QuerySpec<T, T> querySpec) {
-            val q = createQuery(currentSession(), entityClass, querySpec);
+            val q = InternalUtils.createQuery(currentSession(), entityClass, querySpec);
             return uniqueResult(q.setLockMode(LockModeType.PESSIMISTIC_WRITE));
         }
 
@@ -192,7 +192,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 final Criteria criteria = scrollDetails.getCriteria().getExecutableCriteria(currentSession());
                 return criteria.scroll(ScrollMode.FORWARD_ONLY);
             }
-            return createQuery(currentSession(), entityClass, scrollDetails.getQuerySpec())
+            return InternalUtils.createQuery(currentSession(), entityClass, scrollDetails.getQuerySpec())
                     .scroll(ScrollMode.FORWARD_ONLY);
         }
 
@@ -866,7 +866,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         U parent,
         Function<U, T> entityGenerator) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
-        final SelectParam selectParam = SelectParam.builder()
+        val selectParam = SelectParam.<T>builder()
             .criteria(criteria)
             .start(0)
             .numRows(1)
@@ -901,7 +901,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
         U parent,
         Function<U, T> entityGenerator) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
-        final SelectParam selectParam = SelectParam.<T>builder()
+        val selectParam = SelectParam.<T>builder()
             .querySpec(querySpec)
             .start(0)
             .numRows(1)
@@ -1299,16 +1299,5 @@ public class RelationalDao<T> implements ShardedDao<T> {
             pointer.advance(result.getShardIdx(), 1);// will get advanced
         });
         return new ScrollResult<>(pointer, outputBuilder.build());
-    }
-
-    private Query<T> createQuery(
-            final Session session,
-            final Class<T> entityClass,
-            final QuerySpec<T, T> querySpec) {
-        CriteriaBuilder builder = session.getCriteriaBuilder();
-        CriteriaQuery<T> criteria = builder.createQuery(entityClass);
-        Root<T> root = criteria.from(entityClass);
-        querySpec.apply(root, criteria, builder);
-        return session.createQuery(criteria);
     }
 }

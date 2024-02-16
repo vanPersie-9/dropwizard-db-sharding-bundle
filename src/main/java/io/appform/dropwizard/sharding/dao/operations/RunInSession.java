@@ -3,7 +3,7 @@ package io.appform.dropwizard.sharding.dao.operations;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;;
 import org.hibernate.Session;
 
 /**
@@ -12,7 +12,7 @@ import org.hibernate.Session;
  * @param <T> return type of the given action.
  */
 @Data
-@SuperBuilder
+@Builder
 public class RunInSession<T> extends OpContext<T> {
 
   @NonNull

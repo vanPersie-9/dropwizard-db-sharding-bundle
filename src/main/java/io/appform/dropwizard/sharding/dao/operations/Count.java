@@ -1,9 +1,9 @@
 package io.appform.dropwizard.sharding.dao.operations;
 
 import java.util.function.Function;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
@@ -11,11 +11,13 @@ import org.hibernate.criterion.DetachedCriteria;
  * Returns count of records matching given criteria for a shard.
  */
 @Data
-@SuperBuilder
+@Builder
 public class Count extends OpContext<Long> {
 
+  @NonNull
   private DetachedCriteria criteria;
 
+  @NonNull
   private Function<DetachedCriteria, Long> counter;
 
   @Override

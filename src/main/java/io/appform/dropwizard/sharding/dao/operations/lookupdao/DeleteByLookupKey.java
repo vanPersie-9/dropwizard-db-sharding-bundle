@@ -5,14 +5,14 @@ import io.appform.dropwizard.sharding.dao.operations.OpType;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import org.hibernate.Session;
 
 /**
  * Delete an entity by lookup Key.
  */
 @Data
-@SuperBuilder
+@Builder
 public class DeleteByLookupKey extends OpContext<Boolean> {
 
   @NonNull

@@ -7,26 +7,26 @@ import java.util.function.UnaryOperator;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
 
 /**
- * Get entities by criteria. Iterate over each result, mutate and persist to DB all within same
- * session.
+ * Get entities by criteria over scroll. Iterate over each result, mutate and persist to DB all
+ * within same session. Scroll is iteratively performed until, there is no more results or
+ * updateNext BooleanSupplier returns false.
  *
  * @param <T> Type of entity being updated.
  */
 @Data
-@SuperBuilder
+@Builder
 public class UpdateWithScroll<T> extends OpContext<Boolean> {
 
   @NonNull
   private ScrollParam<T> scrollParam;
   @NonNull
   private Function<ScrollParam<T>, ScrollableResults> scroll;
-  @Builder.Default
-  private UnaryOperator<T> mutator = t -> t;
+  @NonNull
+  private UnaryOperator<T> mutator;
   private BiConsumer<T, T> updater;
   private BooleanSupplier updateNext;
 

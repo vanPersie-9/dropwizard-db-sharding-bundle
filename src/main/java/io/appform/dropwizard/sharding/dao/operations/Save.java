@@ -5,7 +5,6 @@ import java.util.function.UnaryOperator;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
@@ -16,7 +15,7 @@ import org.hibernate.Session;
  * @param <R> Return type of the operation after performing any afterSave method.
  */
 @Data
-@SuperBuilder
+@Builder
 public class Save<T, R> extends OpContext<R> {
 
   @NonNull

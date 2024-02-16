@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 import org.hibernate.Session;
 
 /**
@@ -17,12 +17,16 @@ import org.hibernate.Session;
  * @param <T> Type of entity to get and update.
  */
 @Data
-@SuperBuilder
+@Builder
 public class GetAndUpdateByLookupKey<T> extends OpContext<Boolean> {
 
+  @NonNull
   private String id;
+  @NonNull
   private Function<String, T> getter;
+  @NonNull
   private Function<Optional<T>, T> mutator;
+  @NonNull
   private Consumer<T> updater;
 
   @Override

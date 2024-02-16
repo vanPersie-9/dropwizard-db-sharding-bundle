@@ -29,7 +29,6 @@ import io.appform.dropwizard.sharding.dao.operations.RunInSession;
 import io.appform.dropwizard.sharding.dao.operations.RunWithCriteria;
 import io.appform.dropwizard.sharding.dao.operations.Save;
 import io.appform.dropwizard.sharding.dao.operations.Select;
-import io.appform.dropwizard.sharding.dao.operations.SelectByQuerySpec;
 import io.appform.dropwizard.sharding.dao.operations.SelectParam;
 import io.appform.dropwizard.sharding.dao.operations.UpdateByQuery;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdateByLookupKey;
@@ -760,9 +759,11 @@ public class LookupDao<T> implements ShardedDao<T> {
                 .mapToObj(shardId -> {
                     try {
                         val dao = daos.get(shardId);
-                        OpContext<List<T>> opContext= SelectByQuerySpec.<T, List<T>>builder()
+                        OpContext<List<T>> opContext= Select.<T, List<T>>builder()
                             .getter(dao::select)
-                            .querySpec(querySpec)
+                            .selectParam(SelectParam.<T>builder()
+                                .querySpec(querySpec)
+                                .build())
                             .build();
                         return transactionExecutor.execute(dao.sessionFactory,
                                                            true,

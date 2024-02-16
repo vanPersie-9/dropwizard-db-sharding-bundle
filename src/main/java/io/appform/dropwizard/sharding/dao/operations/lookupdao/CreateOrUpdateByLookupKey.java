@@ -6,9 +6,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import lombok.val;
 import org.hibernate.Session;
 
@@ -19,7 +19,7 @@ import org.hibernate.Session;
  * @param <T> Type of entity on which operation being performed.
  */
 @Data
-@SuperBuilder
+@Builder
 public class CreateOrUpdateByLookupKey<T> extends OpContext<T> {
 
   @NonNull
@@ -32,8 +32,10 @@ public class CreateOrUpdateByLookupKey<T> extends OpContext<T> {
   private Function<String, T> getLockedForWrite;
   @NonNull
   private Function<String, T> getter;
+
   @NonNull
   private Function<T, T> saver;
+  // Consumes entity value and persists it to DB.
   @NonNull
   private Consumer<T> updater;
 

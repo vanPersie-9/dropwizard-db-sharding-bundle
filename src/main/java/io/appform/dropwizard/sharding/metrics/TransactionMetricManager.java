@@ -51,7 +51,7 @@ public class TransactionMetricManager {
 
     public MetricData getEntityOpMetricData(final TransactionExecutionContext context) {
         val lockedContextMode = context.getOpContext() instanceof LockAndExecute ?
-            ((LockAndExecute)context.getOpContext()).getMode().name() : null;
+            ((LockAndExecute<?>)context.getOpContext()).getMode().name() : null;
         val metricPrefix = getMetricPrefix("entity", context.getEntityClass().getCanonicalName(),
                 context.getDaoClass().getCanonicalName(),
                 context.getCommandName(),

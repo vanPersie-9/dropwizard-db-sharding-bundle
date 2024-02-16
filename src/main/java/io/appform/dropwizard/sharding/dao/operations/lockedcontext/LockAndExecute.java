@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.Session;
 
 /**
@@ -19,14 +19,27 @@ import org.hibernate.Session;
  * @param <T> Entity type on which lock is being acquired.
  */
 @Data
-@SuperBuilder
 public class LockAndExecute<T> extends OpContext<T> {
 
   private final List<Consumer<T>> operations = Lists.newArrayList();
+  @NonNull
   private final Mode mode;
   private Supplier<T> getter;
   private Function<T, T> saver;
   private T entity;
+
+  @Builder(builderMethodName = "buildForRead")
+  public LockAndExecute(@NonNull Supplier<T> getter) {
+    this.mode = Mode.READ;
+    this.getter = getter;
+  }
+
+  @Builder(builderMethodName = "buildForInsert")
+  public LockAndExecute(@NonNull T entity, @NonNull Function<T, T> saver) {
+    this.mode = Mode.INSERT;
+    this.entity = entity;
+    this.saver = saver;
+  }
 
   @Override
   public T apply(Session session) {
