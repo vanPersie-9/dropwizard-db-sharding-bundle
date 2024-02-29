@@ -1485,7 +1485,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final Object key,
                                                final UnaryOperator<Criteria> criteriaUpdater) {
-        return readOnlyExecutor(parentKey, key, criteriaUpdater, null);
+        return readOnlyExecutor(parentKey, key, criteriaUpdater, () -> false));
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
@@ -1509,7 +1509,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults, null);
+        return readOnlyExecutor(parentKey, criteria, first, numResults, () -> false));
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
@@ -1539,7 +1539,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final QuerySpec<T, T> querySpec,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, querySpec, first, numResults, null);
+        return readOnlyExecutor(parentKey, querySpec, first, numResults, () -> false));
     }
 
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
