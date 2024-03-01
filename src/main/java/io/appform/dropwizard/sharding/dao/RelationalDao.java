@@ -1485,13 +1485,24 @@ public class RelationalDao<T> implements ShardedDao<T> {
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final Object key,
                                                final UnaryOperator<Criteria> criteriaUpdater) {
-        return readOnlyExecutor(parentKey, key, criteriaUpdater, () -> false));
+        return readOnlyExecutor(parentKey, key, criteriaUpdater, () -> false);
     }
 
-    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
-                                               final Object key,
-                                               final UnaryOperator<Criteria> criteriaUpdater,
-                                               final Supplier<Boolean> entityPopulator) {
+    /**
+     * Creates and returns a read-only context for executing read operations on an entities for provided {@code querySpec}
+     *
+     * <p>This method calculates the shard ID based on the provided {@code parentKey}, retrieves the SelectParamPriv
+     * for the corresponding shard, and creates a read-only context for executing read operations on the entities.
+     *
+     * @param parentKey parentKey of the entity will be used to decide shard.
+     * @param key used to provide parent key to be pulld
+     * @param criteriaUpdater Function to update criteria to add additional params
+     * @param entityPopulator A supplier that determines whether entity population should be performed.
+     * @return A new ReadOnlyContext for executing read operations on the selected entity.
+     */public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+                                                  final Object key,
+                                                  final UnaryOperator<Criteria> criteriaUpdater,
+                                                  final Supplier<Boolean> entityPopulator) {
         val shardId = shardCalculator.shardId(parentKey);
         val dao = daos.get(shardId);
         return new ReadOnlyContext<>(shardId,
@@ -1509,9 +1520,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final DetachedCriteria criteria,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, criteria, first, numResults, () -> false));
+        return readOnlyExecutor(parentKey, criteria, first, numResults, () -> false);
     }
 
+    /**
+     * Creates and returns a read-only context for executing read operations on an entities for provided {@code querySpec}
+     *
+     * <p>This method calculates the shard ID based on the provided {@code parentKey}, retrieves the SelectParamPriv
+     * for the corresponding shard, and creates a read-only context for executing read operations on the entities.
+     *
+     * @param parentKey parentKey of the entity will be used to decide shard.
+     * @param criteria used to provide query details to fetch parent entities
+     * @param first The index of the first parent entity to retrieve.
+     * @param numResults The maximum number of parent entities to retrieve.
+     * @param entityPopulator A supplier that determines whether entity population should be performed.
+     * @return A new ReadOnlyContext for executing read operations on the selected entities.
+     */
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final DetachedCriteria criteria,
                                                final int first,
@@ -1539,9 +1563,22 @@ public class RelationalDao<T> implements ShardedDao<T> {
                                                final QuerySpec<T, T> querySpec,
                                                final int first,
                                                final int numResults) {
-        return readOnlyExecutor(parentKey, querySpec, first, numResults, () -> false));
+        return readOnlyExecutor(parentKey, querySpec, first, numResults, () -> false);
     }
 
+    /**
+     * Creates and returns a read-only context for executing read operations on an entities for provided {@code querySpec}
+     *
+     * <p>This method calculates the shard ID based on the provided {@code parentKey}, retrieves the SelectParamPriv
+     * for the corresponding shard, and creates a read-only context for executing read operations on the entities.
+     *
+     * @param parentKey parentKey of the entity will be used to decide shard.
+     * @param querySpec used to provide query details to fetch parent entities
+     * @param first The index of the first parent entity to retrieve.
+     * @param numResults The maximum number of parent entities to retrieve.
+     * @param entityPopulator A supplier that determines whether entity population should be performed.
+     * @return A new ReadOnlyContext for executing read operations on the selected entities.
+     */
     public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                final QuerySpec<T, T> querySpec,
                                                final int first,
@@ -1565,6 +1602,9 @@ public class RelationalDao<T> implements ShardedDao<T> {
         );
     }
 
+    /**
+     * Class to get detail about mapping association between parent and child entity
+     */
     @Builder
     @Getter
     public static class AssociationMappingSpec {
@@ -1573,6 +1613,17 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     }
 
+    /**
+     * This is wrapper class to provide details for fetching child entities
+     * <ul>
+     *   <li>associationMappingSpecs : child and parent column mapping details can be given here,
+     *      which are used to take equality join with parent table</li>
+     *   <li>criteria : querying child using {@link org.hibernate.criterion.DetachedCriteria}</li>
+     *   <li>querySpec : querying child using {@link io.appform.dropwizard.sharding.query.QuerySpec}.</li>
+     *  </ul>
+     *
+     * @param <T>
+     */
     @Builder
     @Getter
     public static class QueryFilterSpec<T> {
@@ -1581,6 +1632,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
         private QuerySpec<T, T> querySpec;
     }
 
+    /**
+     * The {@code ReadOnlyContext} class represents a context for executing read-only operations
+     * within a specific shard of a distributed database. It provides a mechanism to define and
+     * execute read operations on data stored in the shard while handling transaction management,
+     * entity retrieval, and optional entity population.
+     *
+     * <p>This class is typically used for retrieving and processing data from a specific shard.
+     *
+     * @param <T> The type of entity being operated on within the shard.
+     */
     @Getter
     public static class ReadOnlyContext<T> {
         private final int shardId;
@@ -1631,6 +1692,26 @@ public class RelationalDao<T> implements ShardedDao<T> {
             return readAugmentParent(relationalDao, queryFilterSpec, first, numResults, consumer, p -> true);
         }
 
+        /**
+         * Reads and augments a parent entity using a relational DAO, applying a filter and consumer function.
+         * <p>
+         * This method reads and potentially augments a parent entity using a provided relational DAO
+         * and queryFilterSpec within the current context. queryFilterSpec can be passed as {@link AssociationMappingSpec},
+         * {@link org.hibernate.criterion.DetachedCriteria} or {@link io.appform.dropwizard.sharding.query.QuerySpec}.
+         * It applies a filter to the parent entity and, if the filter condition is met, executes a query to retrieve related child entities.
+         * The retrieved child entities are then passed to a consumer function for further processing </p>
+         *
+         * @param <U>           The type of child entities.
+         * @param relationalDao A RelationalDao representing the DAO for retrieving child entities.
+         * @param queryFilterSpec A QuerySpec specifying the criteria for selecting child entities.
+         * @param first The index of the first result to retrieve (pagination).
+         * @param numResults The index of the first result to retrieve (pagination).
+         * @param consumer A BiConsumer for processing the parent entity and its child entities.
+         * @param filter A Predicate for filtering parent entities to decide whether to process them.
+         * @return A ReadOnlyContext representing the current context.
+         * @throws RuntimeException If any exception occurs during the execution of the query or processing
+         *                          of the parent and child entities.
+         */
         private <U> ReadOnlyContext<T> readAugmentParent(
                 final RelationalDao<U> relationalDao,
                 final QueryFilterSpec<U> queryFilterSpec,
@@ -1667,6 +1748,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
             });
         }
 
+        /**
+         * <p> This method first tries to executeImpl() operations. If the resulting entity is null,
+         * this method tries to generate the populate the entity in database by calling {@code entityPopulator}
+         * If {@code entityPopulator} returns true, it is expected that entity is indeed populated in the database
+         * and hence {@code executeImpl()} is called again
+         *
+         * @return An optional containing the retrieved entity, or an empty optional if not found.
+         */
         public Optional<List<T>> execute() {
             var result = executeImpl();
             if (null == result
@@ -1677,6 +1766,16 @@ public class RelationalDao<T> implements ShardedDao<T> {
             return Optional.ofNullable(result);
         }
 
+        /**
+         * <p>This method orchestrates the execution of a read operation within a transactional context.
+         * It ensures that transaction handling, including starting and ending the transaction, is managed properly.
+         * The read operation is performed using the provided {@code getter} function to retrieve list of data based on the
+         * specified {@code queryFilterSpec}. Optional operations, if provided, are applied to every element from result
+         * before returning it.
+         *
+         * @return The result of the read operation after applying optional operations.
+         * @throws RuntimeException if an error occurs during the read operation or if there are transactional issues.
+         */
         private List<T> executeImpl() {
             return observer.execute(executionContext, () -> {
                 TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
