@@ -10,7 +10,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NonNull;
 import org.hibernate.Session;
 
