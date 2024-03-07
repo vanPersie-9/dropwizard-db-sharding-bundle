@@ -20,11 +20,13 @@ package io.appform.dropwizard.sharding.dao;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.ShardInfoProvider;
+import io.appform.dropwizard.sharding.config.ShardingBundleOptions;
 import io.appform.dropwizard.sharding.dao.interceptors.DaoClassLocalObserver;
 import io.appform.dropwizard.sharding.dao.interceptors.EntityClassThreadLocalObserver;
 import io.appform.dropwizard.sharding.dao.interceptors.InterceptorTestUtil;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntity;
 import io.appform.dropwizard.sharding.dao.testdata.entities.RelationalEntityWithAIKey;
+import io.appform.dropwizard.sharding.observers.TransactionObserver;
 import io.appform.dropwizard.sharding.observers.internal.TerminalTransactionObserver;
 import io.appform.dropwizard.sharding.scroll.ScrollResult;
 import io.appform.dropwizard.sharding.sharding.BalancedShardManager;
@@ -90,23 +92,13 @@ public class RelationalDaoTest {
         }
         this.shardManager = new BalancedShardManager(sessionFactories.size());
         this.shardCalculator = new ShardCalculator<>(shardManager, new ConsistentHashBucketIdExtractor<>(shardManager));
+        final ShardingBundleOptions shardingOptions = new ShardingBundleOptions();
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
-        relationalDao = new RelationalDao<>(sessionFactories,
-                RelationalEntity.class,
-                this.shardCalculator,
-                shardInfoProvider,
-                new EntityClassThreadLocalObserver(
-                        new DaoClassLocalObserver(
-                                new TerminalTransactionObserver())));
-        relationalWithAIDao = new RelationalDao<>(sessionFactories,
-                                                  RelationalEntityWithAIKey.class,
-                                                  new ShardCalculator<>(shardManager,
-                                                                        new ConsistentHashBucketIdExtractor<>(
-                                                                                shardManager)),
-                                                  shardInfoProvider,
-                                                  new EntityClassThreadLocalObserver(
-                                                          new DaoClassLocalObserver(
-                                                                  new TerminalTransactionObserver())));
+        final TransactionObserver observer = new EntityClassThreadLocalObserver(new DaoClassLocalObserver(new TerminalTransactionObserver()));
+        relationalDao = new RelationalDao<>(sessionFactories, RelationalEntity.class, this.shardCalculator,
+                shardingOptions, shardInfoProvider, observer);
+        relationalWithAIDao = new RelationalDao<>(sessionFactories, RelationalEntityWithAIKey.class, this.shardCalculator,
+                shardingOptions, shardInfoProvider, observer);
 
     }
 
