@@ -13,10 +13,9 @@ public class EntityOpMetricKey {
     String lockedContextMode;
 
     /**
-     * @deprecated This is here for the backward compatibility to older version of spyglass tracing
-     * module. (field opType got renamed to commandName)
+     * @deprecated Field opType got renamed to commandName. This is here for the backward compatibility.
      */
-    @Deprecated(forRemoval=true)
+    @Deprecated(forRemoval = true)
     public String getOpType() {
         return commandName;
     }

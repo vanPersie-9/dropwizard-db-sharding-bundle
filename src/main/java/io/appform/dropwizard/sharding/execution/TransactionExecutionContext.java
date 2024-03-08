@@ -14,24 +14,22 @@ public class TransactionExecutionContext {
     Class<?> daoClass;
     Class<?> entityClass;
 
-    @NonNull
-    OpContext<?> opContext;
+    @NonNull OpContext<?> opContext;
 
     /**
-     * @deprecated This is here for the backward compatibility to older version of spyglass tracing
-     * module. (field lockedContextMode got removed)
+     * @deprecated Field lockedContextMode got removed with the introduction of opcontext.
+     * This is here for the backward compatibility.
      */
     @Deprecated(forRemoval = true)
     public String getLockedContextMode() {
-        return this.opContext instanceof LockAndExecute ?
-                ((LockAndExecute<?>) this.opContext).getMode().name() : null;
+        return this.opContext instanceof LockAndExecute ? ((LockAndExecute<?>) this.opContext).getMode().name() : null;
     }
 
     /**
-     * @deprecated This is here for the backward compatibility to older version of spyglass tracing
-     * module. (field opType got renamed to commandName)
+     * @deprecated Field opType got renamed to commandName.
+     * This is here for the backward compatibility.
      */
-    @Deprecated(forRemoval=true)
+    @Deprecated(forRemoval = true)
     public String getOpType() {
         return commandName;
     }
