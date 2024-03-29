@@ -126,12 +126,11 @@ public class RelationalDao<T> implements ShardedDao<T> {
          */
 
         T get(final Object lookupKey) {
-            val q = InternalUtils.createQuery(currentSession(),
-                                              entityClass,
-                                              (queryRoot, query, criteriaBuilder) ->
-                                                      query.where(
-                                                              criteriaBuilder.equal(queryRoot.get(keyField.getName()),
-                                                                                    lookupKey)));
+            val q = createQuery(currentSession(),
+                                entityClass,
+                                (queryRoot, query, criteriaBuilder) ->
+                                        query.where(criteriaBuilder.equal(queryRoot.get(keyField.getName()),
+                                                                          lookupKey)));
             return uniqueResult(q.setLockMode(LockModeType.NONE));
         }
 
@@ -311,7 +310,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
         if (!keyField.isAccessible()) {
             try {
                 keyField.setAccessible(true);
-            } catch (SecurityException e) {
+            }
+            catch (SecurityException e) {
                 log.error("Error making key field accessible please use a public method and mark that as @Id", e);
                 throw new IllegalArgumentException("Invalid class, DAO cannot be created.", e);
             }
@@ -659,30 +659,30 @@ public class RelationalDao<T> implements ShardedDao<T> {
 
     <U> List<T> select(RelationalDao.ReadOnlyContext<U> context, DetachedCriteria criteria, int first, int numResults) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
-            val opContext = Select.<T, List<T>>builder()
-                    .getter(dao::select)
-                    .selectParam(SelectParam.<T>builder()
-                                         .criteria(criteria)
-                                         .start(first)
-                                         .numRows(numResults)
-                                         .build())
-                    .build();
-            return transactionExecutor.execute(context.getSessionFactory(), true,
-                                               "select", opContext, context.getShardId(), false);
+        val opContext = Select.<T, List<T>>builder()
+                .getter(dao::select)
+                .selectParam(SelectParam.<T>builder()
+                                     .criteria(criteria)
+                                     .start(first)
+                                     .numRows(numResults)
+                                     .build())
+                .build();
+        return transactionExecutor.execute(context.getSessionFactory(), true,
+                                           "select", opContext, context.getShardId(), false);
     }
 
     <U> List<T> select(RelationalDao.ReadOnlyContext<U> context, QuerySpec<T, T> querySpec, int first, int numResults) {
         final RelationalDaoPriv dao = daos.get(context.getShardId());
-            val opContext = Select.<T, List<T>>builder()
-                    .getter(dao::select)
-                    .selectParam(SelectParam.<T>builder()
-                                         .querySpec(querySpec)
-                                         .start(first)
-                                         .numRows(numResults)
-                                         .build())
-                    .build();
-            return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId(),
-                                               false);
+        val opContext = Select.<T, List<T>>builder()
+                .getter(dao::select)
+                .selectParam(SelectParam.<T>builder()
+                                     .querySpec(querySpec)
+                                     .start(first)
+                                     .numRows(numResults)
+                                     .build())
+                .build();
+        return transactionExecutor.execute(context.getSessionFactory(), true, "select", opContext, context.getShardId(),
+                                           false);
     }
 
     public boolean update(String parentKey, Object id, Function<T, T> updater) {
@@ -1384,7 +1384,8 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * @param criteriaUpdater Function to update criteria to add additional params
      * @param entityPopulator A supplier that determines whether entity population should be performed.
      * @return A new ReadOnlyContext for executing read operations on the selected entity.
-     */public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
+     */
+    public ReadOnlyContext<T> readOnlyExecutor(final String parentKey,
                                                   final Object key,
                                                   final UnaryOperator<Criteria> criteriaUpdater,
                                                   final Supplier<Boolean> entityPopulator) {
@@ -1545,7 +1546,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                 final ShardInfoProvider shardInfoProvider,
                 final Class<?> entityClass,
                 final TransactionObserver observer
-                              ) {
+        ) {
             this.shardId = shardId;
             this.sessionFactory = sessionFactory;
             this.entityPopulator = entityPopulator;
@@ -1666,8 +1667,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
          */
         private List<T> executeImpl() {
             return observer.execute(executionContext, () -> {
-                TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true,
-                                                                               this.skipTransaction);
+                TransactionHandler transactionHandler = new TransactionHandler(sessionFactory, true, this.skipTransaction);
                 transactionHandler.beforeStart();
                 try {
                     val opContext = ((ReadOnlyForRelationalDao<T>) executionContext.getOpContext());
