@@ -9,16 +9,24 @@ import lombok.NonNull;
 import org.hibernate.Session;
 
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+/**
+ * Acquires lock on list of entities and perform all read operations given. Getter implementation provided
+ * is responsible for acquiring locks. This opcontext does not acquire locks in its impl. This executes the given list
+ * of operations, all within a same DB txn.
+ *
+ * @param <T> Entity type on which operations are to be executed.
+ */
 @Data
 @Builder
 public class ReadOnlyForRelationalDao<T> extends OpContext<List<T>> {
     @NonNull
     private final Supplier<List<T>> getter;
     @Builder.Default
-    private final List<Function<List<T>, Void>> operations = Lists.newArrayList();
+    private final List<Consumer<List<T>>> operations = Lists.newArrayList();
 
     @Override
     public OpType getOpType() {
@@ -36,7 +44,7 @@ public class ReadOnlyForRelationalDao<T> extends OpContext<List<T>> {
         if (null == result || result.isEmpty()) {
             return null;
         }
-        operations.forEach(operation -> operation.apply(result));
+        operations.forEach(operation -> operation.accept(result));
         return result;
     }
 }

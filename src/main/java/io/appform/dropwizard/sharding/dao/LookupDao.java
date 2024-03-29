@@ -58,6 +58,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -1093,7 +1094,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @param handler A function that takes the retrieved entity and applies a custom operation.
          * @return This {@code ReadOnlyContext} instance for method chaining.
          */
-        public ReadOnlyContext<T> apply(Function<T, Void> handler) {
+        public ReadOnlyContext<T> apply(Consumer<T> handler) {
             ((ReadOnlyForLookupDao) this.executionContext.getOpContext())
                 .getOperations()
                 .add(handler);
@@ -1270,7 +1271,6 @@ public class LookupDao<T> implements ShardedDao<T> {
                         throw new RuntimeException(e);
                     }
                 }
-                return null;
             });
         }
 
@@ -1309,7 +1309,6 @@ public class LookupDao<T> implements ShardedDao<T> {
                         throw new RuntimeException(e);
                     }
                 }
-                return null;
             });
         }
 

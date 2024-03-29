@@ -88,6 +88,7 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -1565,7 +1566,7 @@ public class RelationalDao<T> implements ShardedDao<T> {
                     .build();
         }
 
-        public ReadOnlyContext<T> apply(final Function<List<T>, Void> handler) {
+        public ReadOnlyContext<T> apply(final Consumer<List<T>> handler) {
             ((ReadOnlyForRelationalDao) this.executionContext.getOpContext())
                     .getOperations()
                     .add(handler);
@@ -1633,7 +1634,6 @@ public class RelationalDao<T> implements ShardedDao<T> {
                         throw new RuntimeException(e);
                     }
                 });
-                return null;
             });
         }
 
