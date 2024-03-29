@@ -313,6 +313,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new RelationalDao<>(this.sessionFactories, clazz,
                 new ShardCalculator<>(this.shardManager,
                         new ConsistentHashBucketIdExtractor<>(this.shardManager)),
+                this.shardingOptions,
                 shardInfoProvider,
                 rootObserver);
     }
@@ -327,6 +328,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 new ShardCalculator<>(this.shardManager,
                         new ConsistentHashBucketIdExtractor<>(this.shardManager)),
                 cacheManager,
+                this.shardingOptions,
                 shardInfoProvider,
                 rootObserver);
     }
@@ -339,6 +341,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
         return new RelationalDao<>(this.sessionFactories,
                 clazz,
                 new ShardCalculator<>(this.shardManager, bucketIdExtractor),
+                this.shardingOptions,
                 shardInfoProvider,
                 rootObserver);
     }
@@ -352,6 +355,7 @@ public abstract class DBShardingBundleBase<T extends Configuration> implements C
                 clazz,
                 new ShardCalculator<>(this.shardManager, bucketIdExtractor),
                 cacheManager,
+                this.shardingOptions,
                 shardInfoProvider,
                 rootObserver);
     }

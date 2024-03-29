@@ -35,7 +35,7 @@ import io.appform.dropwizard.sharding.dao.operations.lookupdao.CreateOrUpdateByL
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.DeleteByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetAndUpdateByLookupKey;
 import io.appform.dropwizard.sharding.dao.operations.lookupdao.GetByLookupKey;
-import io.appform.dropwizard.sharding.dao.operations.readonlycontext.ReadOnly;
+import io.appform.dropwizard.sharding.dao.operations.lookupdao.readonlycontext.ReadOnlyForLookupDao;
 import io.appform.dropwizard.sharding.execution.TransactionExecutionContext;
 import io.appform.dropwizard.sharding.execution.TransactionExecutor;
 import io.appform.dropwizard.sharding.observers.TransactionObserver;
@@ -65,9 +65,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.persistence.LockModeType;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Root;
+
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.SneakyThrows;
@@ -83,7 +81,6 @@ import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
-import org.hibernate.query.Query;
 
 /**
  * A dao to manage lookup and top level elements in the system. Can save and retrieve an object (tree) from any shard.
@@ -1074,7 +1071,7 @@ public class LookupDao<T> implements ShardedDao<T> {
             this.skipTransaction = skipTxn;
             this.observer = observer;
             val shardName = shardInfoProvider.shardName(shardId);
-            OpContext<T> opContext = ReadOnly.<T>builder()
+            val opContext = ReadOnlyForLookupDao.<T>builder()
                 .key(key)
                 .getter(getter)
                 .build();
@@ -1097,7 +1094,7 @@ public class LookupDao<T> implements ShardedDao<T> {
          * @return This {@code ReadOnlyContext} instance for method chaining.
          */
         public ReadOnlyContext<T> apply(Function<T, Void> handler) {
-            ((ReadOnly) this.executionContext.getOpContext())
+            ((ReadOnlyForLookupDao) this.executionContext.getOpContext())
                 .getOperations()
                 .add(handler);
             return this;
@@ -1355,7 +1352,7 @@ public class LookupDao<T> implements ShardedDao<T> {
                                                                                this.skipTransaction);
                 transactionHandler.beforeStart();
                 try {
-                    val opContext = ((ReadOnly<T>) executionContext.getOpContext());
+                    val opContext = ((ReadOnlyForLookupDao<T>) executionContext.getOpContext());
                     return opContext.apply(transactionHandler.getSession());
                 }
                 catch (Exception e) {

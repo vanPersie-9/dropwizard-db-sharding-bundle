@@ -1,0 +1,42 @@
+package io.appform.dropwizard.sharding.dao.operations.relationaldao.readonlycontext;
+
+import com.google.common.collect.Lists;
+import io.appform.dropwizard.sharding.dao.operations.OpContext;
+import io.appform.dropwizard.sharding.dao.operations.OpType;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NonNull;
+import org.hibernate.Session;
+
+import java.util.List;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+@Data
+@Builder
+public class ReadOnlyForRelationalDao<T> extends OpContext<List<T>> {
+    @NonNull
+    private final Supplier<List<T>> getter;
+    @Builder.Default
+    private final List<Function<List<T>, Void>> operations = Lists.newArrayList();
+
+    @Override
+    public OpType getOpType() {
+        return OpType.READ_ONLY_FOR_RELATIONAL_DAO;
+    }
+
+    @Override
+    public <P> P visit(final OpContextVisitor<P> visitor) {
+        return visitor.visit(this);
+    }
+
+    @Override
+    public List<T> apply(final Session session) {
+        List<T> result = getter.get();
+        if (null == result || result.isEmpty()) {
+            return null;
+        }
+        operations.forEach(operation -> operation.apply(result));
+        return result;
+    }
+}

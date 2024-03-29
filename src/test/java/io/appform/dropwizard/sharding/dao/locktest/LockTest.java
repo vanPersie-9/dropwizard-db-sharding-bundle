@@ -100,7 +100,7 @@ public class LockTest {
         final ShardInfoProvider shardInfoProvider = new ShardInfoProvider("default");
         lookupDao = new LookupDao<>(sessionFactories, SomeLookupObject.class, shardCalculator, shardingOptions,
                 shardInfoProvider, new DaoClassLocalObserver(new TerminalTransactionObserver()));
-        relationDao = new RelationalDao<>(sessionFactories, SomeOtherObject.class, shardCalculator,
+        relationDao = new RelationalDao<>(sessionFactories, SomeOtherObject.class, shardCalculator, shardingOptions,
                 shardInfoProvider, new DaoClassLocalObserver(new TerminalTransactionObserver()));
     }
 

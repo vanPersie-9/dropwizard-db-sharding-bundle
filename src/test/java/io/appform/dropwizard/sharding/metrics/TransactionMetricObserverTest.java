@@ -31,15 +31,24 @@ class TransactionMetricObserverTest {
         Mockito.doReturn(false).when(metricManager).isMetricApplicable(null);
         assertEquals(terminate(),
                 transactionMetricObserver.execute(TransactionExecutionContext.builder()
-                    .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+                                                          .commandName("testCommand")
+                                                          .shardName("testshard1")
+                                                          .daoClass(RelationalDao.class)
+                                                          .entityClass(RelationalEntity.class)
+                                                          .opContext(Save.<String, String>builder()
+                                                                               .entity("dummy")
+                                                                               .saver(t->t)
+                                                                               .build())
                     .build(), this::terminate));
     }
 
     @Test
     void testExecuteWithNoException() {
         val context = TransactionExecutionContext.builder()
-            .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
-            .entityClass(RelationalDao.class)
+                .commandName("testCommand")
+                .shardName("testshard1")
+                .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+                .entityClass(RelationalDao.class)
                 .shardName("shard")
                 .daoClass(RelationalEntity.class)
                 .build();
@@ -68,8 +77,10 @@ class TransactionMetricObserverTest {
     @Test
     void testExecuteWithException() {
         val context = TransactionExecutionContext.builder()
-            .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
-            .entityClass(RelationalDao.class)
+                .commandName("testCommand")
+                .shardName("testshard1")
+                .opContext(Save.<String, String>builder().entity("dummy").saver(t->t).build())
+                .entityClass(RelationalDao.class)
                 .shardName("shard")
                 .daoClass(RelationalEntity.class)
                 .build();

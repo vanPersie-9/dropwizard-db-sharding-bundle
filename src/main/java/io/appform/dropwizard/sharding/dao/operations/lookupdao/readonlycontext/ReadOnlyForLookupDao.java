@@ -1,4 +1,4 @@
-package io.appform.dropwizard.sharding.dao.operations.readonlycontext;
+package io.appform.dropwizard.sharding.dao.operations.lookupdao.readonlycontext;
 
 import com.google.common.collect.Lists;
 import io.appform.dropwizard.sharding.dao.operations.OpContext;
@@ -12,7 +12,7 @@ import org.hibernate.Session;
 
 @Data
 @Builder
-public class ReadOnly<T> extends OpContext<T> {
+public class ReadOnlyForLookupDao<T> extends OpContext<T> {
 
     @NonNull
     private String key;
@@ -33,7 +33,7 @@ public class ReadOnly<T> extends OpContext<T> {
 
     @Override
     public OpType getOpType() {
-        return OpType.READ_ONLY;
+        return OpType.READ_ONLY_FOR_LOOKUP_DAO;
     }
 
     @Override

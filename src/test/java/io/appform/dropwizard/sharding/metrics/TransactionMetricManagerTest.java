@@ -64,7 +64,8 @@ class TransactionMetricManagerTest {
                 .entityClass(this.getClass())
                 .daoClass(this.getClass())
                 .commandName("read")
-                .opContext(LockAndExecute.<String>buildForRead().build())
+                .shardName("testshard1")
+                .opContext(LockAndExecute.<String>buildForRead().getter(() -> null).build())
                 .build();
         val metricRegistry = new MetricRegistry();
         val metricManager = new TransactionMetricManager(null, metricRegistry);
