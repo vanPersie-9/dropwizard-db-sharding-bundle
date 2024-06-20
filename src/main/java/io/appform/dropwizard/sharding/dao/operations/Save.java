@@ -24,6 +24,8 @@ public class Save<T, R> extends OpContext<R> {
   private UnaryOperator<T> saver;
   @Builder.Default
   private Function<T, R> afterSave = t -> (R) t;
+  @Builder.Default
+  private Function<T, ?> filter = t -> t;
 
   @Override
   public R apply(Session session) {

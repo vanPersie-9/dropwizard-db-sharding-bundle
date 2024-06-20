@@ -362,14 +362,14 @@ public class RelationalDao<T> implements ShardedDao<T> {
      * @throws Exception If an error occurs during the save operation.
      */
     public Optional<T> save(String parentKey, T entity) throws Exception {
-        return Optional.ofNullable(save(parentKey, entity, t -> t));
+        return Optional.ofNullable(save(parentKey, entity, t -> t, t -> t));
     }
 
-    public <U> U save(String parentKey, T entity, Function<T, U> handler) {
+    public <U> U save(String parentKey, T entity, Function<T, U> handler, Function<T, ?> filter) {
         int shardId = shardCalculator.shardId(parentKey);
         RelationalDaoPriv dao = daos.get(shardId);
         val opContext = Save.<T, U>builder()
-                .saver(dao::save).entity(entity).afterSave(handler).build();
+                .saver(dao::save).entity(entity).afterSave(handler).filter(filter).build();
         return transactionExecutor.execute(dao.sessionFactory, false, "save", opContext,
                                            shardId);
     }

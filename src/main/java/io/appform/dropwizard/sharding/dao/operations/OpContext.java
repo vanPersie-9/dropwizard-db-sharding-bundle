@@ -25,6 +25,8 @@ public abstract class OpContext<T> implements Function<Session, T> {
 
   public abstract <P> P visit(OpContextVisitor<P> visitor);
 
+//  public abstract <P> P filter(Function<T, ?> filter);
+
   public interface OpContextVisitor<P> {
 
     P visit(Count opContext);
